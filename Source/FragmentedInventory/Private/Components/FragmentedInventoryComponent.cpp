@@ -69,11 +69,13 @@ void UFragmentedInventoryComponent::InitializeInventory(int32 InSlotCount, EInve
 bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
 	OutSlotIndex = INDEX_NONE;
+	/*
 	if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItem called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
 	}
+	*/
 
 	if (!IsValid(InItemDataAsset))
 	{
@@ -171,11 +173,11 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity)
 {
 	OutSlotIndex = INDEX_NONE;
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemWithInstance called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
-	}
+	}*/
 
 	const UItemDefinitionAsset* itemDataAsset = InItemInstance.GetItemDataAsset();
 	if (!IsValid(itemDataAsset))
@@ -237,11 +239,12 @@ bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex, con
 
 bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemToSlot called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
 	}
+	*/
 
 	FInventorySlot* slot = SlotList.GetSlotMutable(InSlotIndex);
 	if (slot == nullptr)
@@ -279,11 +282,11 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 
 bool UFragmentedInventoryComponent::AddItemToSlotWithInstance(int32 InSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity)
 {
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemToSlotWithInstance called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
-	}
+	}*/
 
 	const UItemDefinitionAsset* itemDataAsset = InItemInstance.GetItemDataAsset();
 	if (!IsValid(itemDataAsset))
@@ -328,11 +331,11 @@ bool UFragmentedInventoryComponent::AddItemToSlotWithInstance(int32 InSlotIndex,
 
 bool UFragmentedInventoryComponent::RemoveItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - RemoveItem called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
-	}
+	}*/
 
 	if (!IsValid(InItemDataAsset))
 	{
@@ -385,11 +388,11 @@ bool UFragmentedInventoryComponent::RemoveItem(const UItemDefinitionAsset* InIte
 
 bool UFragmentedInventoryComponent::RemoveItemFromSlot(int32 InSlotIndex, int32 InQuantity)
 {
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - RemoveItemFromSlot called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
-	}
+	}*/
 
 	FInventorySlot* slot = SlotList.GetSlotMutable(InSlotIndex);
 	if (slot == nullptr)
@@ -431,11 +434,11 @@ bool UFragmentedInventoryComponent::RemoveItemFromSlot(int32 InSlotIndex, int32 
 
 void UFragmentedInventoryComponent::ClearSlot(int32 InSlotIndex)
 {
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - ClearSlot called on non-authority"), __FUNCTION__, __LINE__);
 		return;
-	}
+	}*/
 
 	FInventorySlot* slot = SlotList.GetSlotMutable(InSlotIndex);
 	if (slot == nullptr)
@@ -465,11 +468,11 @@ void UFragmentedInventoryComponent::ClearSlot(int32 InSlotIndex)
 
 bool UFragmentedInventoryComponent::SwapSlots(int32 InSlotIndexA, int32 InSlotIndexB)
 {
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - SwapSlots called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
-	}
+	}*/
 
 	FInventorySlot* slotA = SlotList.GetSlotMutable(InSlotIndexA);
 	FInventorySlot* slotB = SlotList.GetSlotMutable(InSlotIndexB);
@@ -510,11 +513,11 @@ bool UFragmentedInventoryComponent::SwapSlots(int32 InSlotIndexA, int32 InSlotIn
 
 bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity)
 {
-	if (GetOwnerRole() != ROLE_Authority)
+	/*if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - MoveItem called on non-authority"), __FUNCTION__, __LINE__);
 		return false;
-	}
+	}*/
 
 	FInventorySlot* fromSlot = SlotList.GetSlotMutable(InFromSlotIndex);
 	FInventorySlot* toSlot = SlotList.GetSlotMutable(InToSlotIndex);
