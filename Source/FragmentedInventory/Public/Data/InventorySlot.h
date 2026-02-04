@@ -30,7 +30,6 @@ public:
 	FInventorySlot()
 		: SlotIndex(INDEX_NONE)
 		, SlotType(EInventorySlotType::General)
-		, MaxStackSize(1)
 		, CurrentStackSize(0)
 		, bIsLocked(false)
 	{
@@ -39,7 +38,6 @@ public:
 	FInventorySlot(int32 InSlotIndex, EInventorySlotType InSlotType = EInventorySlotType::General)
 		: SlotIndex(InSlotIndex)
 		, SlotType(InSlotType)
-		, MaxStackSize(1)
 		, CurrentStackSize(0)
 		, bIsLocked(false)
 	{
@@ -55,7 +53,10 @@ public:
 	bool CanStackWith(const FInventoryItemInstance& InOtherItem) const;
 
 	// Get remaining stack space
-	int32 GetRemainingStackSpace() const { return MaxStackSize - CurrentStackSize; }
+	int32 GetRemainingStackSpace() const;
+	
+	// Get maximum stack size for current item in slot (queries item's Stackable fragment)
+	int32 GetMaxStackSize() const;
 
 public:
 	// The index of this slot in the inventory (fixed)
@@ -74,10 +75,6 @@ public:
 	// The item instance stored in this slot (invalid if empty)
 	UPROPERTY(BlueprintReadOnly, Category = "Slot")
 	FInventoryItemInstance ItemInstance;
-
-	// Maximum stack size for items in this slot
-	UPROPERTY(BlueprintReadOnly, Category = "Slot")
-	int32 MaxStackSize;
 
 	// Current number of items stacked in this slot
 	UPROPERTY(BlueprintReadOnly, Category = "Slot")

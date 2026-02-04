@@ -1,14 +1,15 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Components/FragmentedInventoryComponent.h"
+#include "Data/InventoryItemInstance.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/ActorChannel.h"
 
 UFragmentedInventoryComponent::UFragmentedInventoryComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-	  , DefaultSlotCount(20)
-	  , DefaultSlotType(EInventorySlotType::General)
-	  , bAutoInitialize(true)
+	, DefaultSlotCount(20)
+	, DefaultSlotType(EInventorySlotType::General)
+	, bAutoInitialize(true)
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
@@ -42,12 +43,13 @@ void UFragmentedInventoryComponent::InitializeInventory(int32 InSlotCount, EInve
 
 	SlotList.OwnerComponent = this;
 	SlotList.InitializeSlots(InSlotCount, InDefaultSlotType);
-
+	
 	UE_LOG(LogTemp, Log, TEXT("%hs:%d - Initialized inventory with %d slots"), __FUNCTION__, __LINE__, InSlotCount);
 }
 
 bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
+	OutSlotIndex = INDEX_NONE;
 	if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItem called on non-authority"), __FUNCTION__, __LINE__);
@@ -66,6 +68,8 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 		return false;
 	}
 
+	// Get the max stack size for this item type
+	const int32 itemMaxStackSize = InItemDataAsset->GetMaxStackSize();
 	int32 remainingQuantity = InQuantity;
 
 	// Try to stack with existing items first
@@ -119,15 +123,15 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 		FInventorySlot* slot = SlotList.GetSlotMutable(emptySlotIndex);
 		if (slot == nullptr)
 		{
-			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Failed to get slot at index %d"), __FUNCTION__, __LINE__,
-			       emptySlotIndex);
+			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Failed to get slot at index %d"), __FUNCTION__, __LINE__, emptySlotIndex);
 			return false;
 		}
 
 		// Create new item instance
 		slot->ItemInstance = CreateItemInstance(InItemDataAsset);
-
-		const int32 quantityToAdd = FMath::Min(remainingQuantity, slot->MaxStackSize);
+		
+		// Use the item's max stack size, not a hardcoded value
+		const int32 quantityToAdd = FMath::Min(remainingQuantity, itemMaxStackSize);
 		slot->CurrentStackSize = quantityToAdd;
 		remainingQuantity -= quantityToAdd;
 
@@ -142,8 +146,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 	return true;
 }
 
-bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset,
-                                                  int32 InQuantity)
+bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
@@ -236,8 +239,7 @@ bool UFragmentedInventoryComponent::RemoveItem(const UItemDefinitionAsset* InIte
 	}
 
 	// Couldn't remove full quantity
-	UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Could not remove full quantity. Remaining: %d"), __FUNCTION__, __LINE__,
-	       remainingQuantity);
+	UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Could not remove full quantity. Remaining: %d"), __FUNCTION__, __LINE__, remainingQuantity);
 	return remainingQuantity == 0;
 }
 
@@ -264,8 +266,8 @@ bool UFragmentedInventoryComponent::RemoveItemFromSlot(int32 InSlotIndex, int32 
 
 	if (slot->CurrentStackSize < InQuantity)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Slot %d does not have enough items. Has: %d, Requested: %d"),
-		       __FUNCTION__, __LINE__, InSlotIndex, slot->CurrentStackSize, InQuantity);
+		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Slot %d does not have enough items. Has: %d, Requested: %d"), 
+			__FUNCTION__, __LINE__, InSlotIndex, slot->CurrentStackSize, InQuantity);
 		return false;
 	}
 
@@ -331,8 +333,7 @@ bool UFragmentedInventoryComponent::SwapSlots(int32 InSlotIndexA, int32 InSlotIn
 
 	if (slotA == nullptr || slotB == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid slot indices: %d, %d"), __FUNCTION__, __LINE__, InSlotIndexA,
-		       InSlotIndexB);
+		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid slot indices: %d, %d"), __FUNCTION__, __LINE__, InSlotIndexA, InSlotIndexB);
 		return false;
 	}
 
@@ -376,8 +377,7 @@ bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSl
 
 	if (fromSlot == nullptr || toSlot == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid slot indices: %d, %d"), __FUNCTION__, __LINE__, InFromSlotIndex,
-		       InToSlotIndex);
+		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid slot indices: %d, %d"), __FUNCTION__, __LINE__, InFromSlotIndex, InToSlotIndex);
 		return false;
 	}
 
@@ -392,8 +392,8 @@ bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSl
 
 	if (quantityToMove > fromSlot->CurrentStackSize)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Not enough items in from slot. Has: %d, Requested: %d"),
-		       __FUNCTION__, __LINE__, fromSlot->CurrentStackSize, quantityToMove);
+		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Not enough items in from slot. Has: %d, Requested: %d"), 
+			__FUNCTION__, __LINE__, fromSlot->CurrentStackSize, quantityToMove);
 		return false;
 	}
 
@@ -457,15 +457,14 @@ bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSl
 		return SwapSlots(InFromSlotIndex, InToSlotIndex);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Cannot move partial stack to occupied slot with different item"),
-	       __FUNCTION__, __LINE__);
+	UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Cannot move partial stack to occupied slot with different item"), __FUNCTION__, __LINE__);
 	return false;
 }
 
 const FInventorySlot& UFragmentedInventoryComponent::GetSlot(int32 InSlotIndex) const
 {
 	static FInventorySlot emptySlot;
-
+	
 	const FInventorySlot* slot = SlotList.GetSlot(InSlotIndex);
 	if (slot == nullptr)
 	{
@@ -535,13 +534,11 @@ void UFragmentedInventoryComponent::SetSlotType(int32 InSlotIndex, EInventorySlo
 	BroadcastSlotChanged(InSlotIndex);
 }
 
-void UFragmentedInventoryComponent::SetSlotRestrictionTags(int32 InSlotIndex,
-                                                           const FGameplayTagContainer& InRestrictionTags)
+void UFragmentedInventoryComponent::SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - SetSlotRestrictionTags called on non-authority"), __FUNCTION__,
-		       __LINE__);
+		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - SetSlotRestrictionTags called on non-authority"), __FUNCTION__, __LINE__);
 		return;
 	}
 
@@ -591,19 +588,17 @@ FInventorySlot* UFragmentedInventoryComponent::GetSlotMutable(int32 InSlotIndex)
 	return SlotList.GetSlotMutable(InSlotIndex);
 }
 
-FInventoryItemInstance UFragmentedInventoryComponent::CreateItemInstance(
-	const UItemDefinitionAsset* InItemDataAsset) const
+FInventoryItemInstance UFragmentedInventoryComponent::CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset) const
 {
 	FInventoryItemInstance newInstance;
-
+	
 	if (IsValid(InItemDataAsset))
 	{
 		newInstance.InitializeFromDataAsset(InItemDataAsset);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Cannot create item instance from invalid data asset"), __FUNCTION__,
-		       __LINE__);
+		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Cannot create item instance from invalid data asset"), __FUNCTION__, __LINE__);
 	}
 
 	return newInstance;

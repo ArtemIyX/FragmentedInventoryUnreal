@@ -1,7 +1,32 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
+
 #include "Data/InventorySlot.h"
 #include "Data/ItemDefinitionAsset.h"
+
+int32 FInventorySlot::GetMaxStackSize() const
+{
+	// If slot is empty, return a default max value (or 1)
+	if (IsEmpty())
+	{
+		return 1;
+	}
+
+	// Query the item's definition for its max stack size
+	const UItemDefinitionAsset* itemDataAsset = ItemInstance.GetItemDataAsset();
+	if (IsValid(itemDataAsset))
+	{
+		return itemDataAsset->GetMaxStackSize();
+	}
+
+	// Fallback to 1 if no valid item
+	return 1;
+}
+
+int32 FInventorySlot::GetRemainingStackSpace() const
+{
+	return GetMaxStackSize() - CurrentStackSize;
+}
 
 bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity) const
 {

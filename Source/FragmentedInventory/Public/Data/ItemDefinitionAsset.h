@@ -42,6 +42,16 @@ public:
 #endif
 
 public:
+
+	// Get maximum stack size for this item
+	// Returns 1 if item has no Stackable fragment, otherwise returns the fragment's MaxStackSize
+	UFUNCTION(BlueprintCallable, Category = "Item")
+	int32 GetMaxStackSize() const;
+
+	// Check if this item is stackable (has Stackable fragment)
+	UFUNCTION(BlueprintCallable, Category = "Item")
+	bool IsStackable() const;
+	
 	// Get fragment instance by class type
 	template<typename T>
 	T* GetFragment() const

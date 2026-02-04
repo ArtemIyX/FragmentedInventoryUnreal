@@ -3,6 +3,7 @@
 
 #include "Data/ItemDefinitionAsset.h"
 
+#include "Fragments/ItemFragment_Stackable.h"
 #include "Misc/DataValidation.h"
 #include "Objects/ItemFragment_Base.h"
 
@@ -54,8 +55,30 @@ EDataValidationResult UItemDefinitionAsset::IsDataValid(class FDataValidationCon
 
 	return Result;
 }
-#endif
 
+
+#endif
+int32 UItemDefinitionAsset::GetMaxStackSize() const
+{
+	// Query the Stackable fragment if it exists
+	const UItemFragment_Stackable* stackableFragment = GetFragment<UItemFragment_Stackable>();
+
+	if (stackableFragment != nullptr)
+	{
+		// Return the max stack size defined by the Stackable fragment
+		return stackableFragment->MaxStackSize;
+	}
+
+	// Default: no stacking (single item only)
+	return 1;
+}
+
+bool UItemDefinitionAsset::IsStackable() const
+{
+	// Item is stackable if it has a Stackable fragment with MaxStackSize > 1
+	const UItemFragment_Stackable* stackableFragment = GetFragment<UItemFragment_Stackable>();
+	return stackableFragment != nullptr && stackableFragment->MaxStackSize > 1;
+}
 
 UItemFragment_Base* UItemDefinitionAsset::GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const
 {
