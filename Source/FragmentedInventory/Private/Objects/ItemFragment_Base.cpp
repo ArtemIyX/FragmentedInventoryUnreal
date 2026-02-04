@@ -21,7 +21,7 @@ void UItemFragment_Base::InitializeDynamicData(FInstancedStruct& OutDynamicData)
 	if (!IsValid(structType))
 	{
 		UE_LOG(LogTemp, Error, TEXT("%hs:%d - GetDynamicDataStructType returned null for fragment %s"), __FUNCTION__,
-		       __LINE__, *GetNameSafe(this));
+			   __LINE__, *GetNameSafe(this));
 		return;
 	}
 
@@ -29,17 +29,17 @@ void UItemFragment_Base::InitializeDynamicData(FInstancedStruct& OutDynamicData)
 }
 
 void UItemFragment_Base::OnItemCreated(FInventoryItemInstance* ItemInstance,
-                                       const FInstancedStruct& InDynamicData) const
+									   const FInstancedStruct& InDynamicData) const
 {
 	if (ItemInstance)
 		GrantTags(ItemInstance->ItemTags);
 }
 
 void UItemFragment_Base::OnItemDestroyed(FInventoryItemInstance* ItemInstance,
-                                         const FInstancedStruct& InDynamicData) const
+										 const FInstancedStruct& InDynamicData) const
 {
 	if (ItemInstance)
-		RemoveTags(ItemInstance->ItemTags);
+		GrantTags(ItemInstance->ItemTags);
 }
 
 void UItemFragment_Base::GrantTags(FGameplayTagContainer& ItemTags) const

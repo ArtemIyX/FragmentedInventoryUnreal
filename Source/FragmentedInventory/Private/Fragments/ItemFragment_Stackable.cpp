@@ -2,6 +2,8 @@
 
 #include "Fragments/ItemFragment_Stackable.h"
 
+#include "Data/InventoryItemInstance.h"
+
 UItemFragment_Stackable::UItemFragment_Stackable(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 	, MaxStackSize(99)
@@ -49,4 +51,35 @@ FString UItemFragment_Stackable::GetDebugString(const FInstancedStruct& InDynami
 	return super;
 	/*return FString::Printf(TEXT("%s: %d/%d"), *super,
 		dynamicData->);*/
+}
+
+bool UItemFragment_Stackable::CanStackWith(const FInventoryItemInstance& InItemA, const FInventoryItemInstance& InItemB) const
+{
+	// Must be same item definition
+	if (InItemA.GetItemDataAsset() != InItemB.GetItemDataAsset())
+	{
+		return false;
+	}
+
+	// Use stack key comparison for flexible stacking logic
+	const FString keyA = GetStackKey(InItemA);
+	const FString keyB = GetStackKey(InItemB);
+
+	return keyA.Equals(keyB);
+}
+
+FString UItemFragment_Stackable::GetStackKey(const FInventoryItemInstance& InItem) const
+{
+	// Default behavior: all instances of this item can stack together
+	// Return a constant key for unconditional stacking (like bullets, resources)
+	
+	if (bAllowStackingWithDifferentData)
+	{
+		// All instances stack together regardless of dynamic data
+		return TEXT("default");
+	}
+	
+	// If not allowing different data, use the instance ID as key
+	// This means each instance is unique and won't stack
+	return InItem.ItemInstanceID.ToString();
 }

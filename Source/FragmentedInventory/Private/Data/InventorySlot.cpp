@@ -3,6 +3,7 @@
 
 #include "Data/InventorySlot.h"
 #include "Data/ItemDefinitionAsset.h"
+#include "Fragments/ItemFragment_Stackable.h"
 
 int32 FInventorySlot::GetMaxStackSize() const
 {
@@ -107,5 +108,25 @@ bool FInventorySlot::CanStackWith(const FInventoryItemInstance& InOtherItem) con
 	}
 
 	// Check if we have space
-	return GetRemainingStackSpace() > 0;
+	if (GetRemainingStackSpace() <= 0)
+	{
+		return false;
+	}
+
+	// Delegate to the Stackable fragment for stacking logic
+	const UItemDefinitionAsset* itemDataAsset = ItemInstance.GetItemDataAsset();
+	if (!IsValid(itemDataAsset))
+	{
+		return false;
+	}
+
+	const UItemFragment_Stackable* stackableFragment = itemDataAsset->GetFragment<UItemFragment_Stackable>();
+	if (stackableFragment == nullptr)
+	{
+		// Item is not stackable (no Stackable fragment)
+		return false;
+	}
+
+	// Let the fragment decide if these instances can stack
+	return stackableFragment->CanStackWith(ItemInstance, InOtherItem);
 }

@@ -38,6 +38,16 @@ public:
 	virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const override;
 
 	virtual FString GetDebugString(const FInstancedStruct& InDynamicData) const override;
+
+	// Check if two item instances can stack together
+	// Override this for custom stacking logic
+	virtual bool CanStackWith(const FInventoryItemInstance& InItemA, const FInventoryItemInstance& InItemB) const;
+
+	// Get a unique key that identifies stackable instances
+	// Items with the same key can stack together
+	// Override for conditional stacking (e.g., "empty", "full", "50%_durability")
+	virtual FString GetStackKey(const FInventoryItemInstance& InItem) const;
+
 public:
 	// Maximum number of items that can stack in a single slot
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stackable", meta = (ClampMin = "1", ClampMax = "9999"))
