@@ -28,7 +28,8 @@ public class FragmentedInventory : ModuleRules
 			new string[]
 			{
 				"Core",
-				"AdvancedAsset", "CoreUObject", "GameplayTags"
+				"AdvancedAsset", "CoreUObject", "GameplayTags",
+				"NetCore"
 				// ... add other public dependencies that you statically link with here ...
 			}
 		);
@@ -40,7 +41,7 @@ public class FragmentedInventory : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"Slate",
-				"SlateCore",
+				"SlateCore"
 				// ... add private dependencies that you statically link with here ...	
 			}
 		);
