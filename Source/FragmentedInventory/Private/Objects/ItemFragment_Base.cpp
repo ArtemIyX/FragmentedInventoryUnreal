@@ -32,25 +32,36 @@ void UItemFragment_Base::OnItemCreated(FInventoryItemInstance* ItemInstance,
 									   const FInstancedStruct& InDynamicData) const
 {
 	if (ItemInstance)
+	{
 		GrantTags(ItemInstance->ItemTags);
+	}
+		
 }
 
 void UItemFragment_Base::OnItemDestroyed(FInventoryItemInstance* ItemInstance,
 										 const FInstancedStruct& InDynamicData) const
 {
 	if (ItemInstance)
-		GrantTags(ItemInstance->ItemTags);
+	{
+		RemoveTags(ItemInstance->ItemTags);
+	}
 }
 
 void UItemFragment_Base::GrantTags(FGameplayTagContainer& ItemTags) const
 {
-	for (int32 i = 0; i < GrantItemTags.Num(); ++i)
+	for (int32 i = 0; i < DefaultItemTags.Num(); ++i)
 	{
-		ItemTags.AddTag(GrantItemTags.GetByIndex(i));
+		ItemTags.AddTag(DefaultItemTags.GetByIndex(i));
+	}
+
+	for (int32 i = 0; i < AdditionalItemTags.Num(); ++i)
+	{
+		ItemTags.AddTag(AdditionalItemTags.GetByIndex(i));
 	}
 }
 
 void UItemFragment_Base::RemoveTags(FGameplayTagContainer& ItemTags) const
 {
-	ItemTags.RemoveTags(GrantItemTags);
+	ItemTags.RemoveTags(DefaultItemTags);
+	ItemTags.RemoveTags(AdditionalItemTags);
 }

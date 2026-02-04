@@ -7,7 +7,7 @@ UItemFragment_StackableConditional::UItemFragment_StackableConditional(const FOb
 	: Super(ObjectInitializer)
 {
 	FragmentDisplayName = FText::FromString(TEXT("Stackable Conditional"));
-	
+
 	// Conditional stacking doesn't use the legacy flag
 	bAllowStackingWithDifferentData = false;
 }
@@ -16,6 +16,12 @@ FString UItemFragment_StackableConditional::GetStackKey(const FInventoryItemInst
 {
 	// Call blueprint implementation if available
 	return BP_GetStackKey(InItem);
+}
+
+FString UItemFragment_StackableConditional::GetDebugString(const FInstancedStruct& InDynamicData) const
+{
+	const FString sup = Super::GetDebugString(InDynamicData);
+	return FString::Printf(TEXT("%s\n -Conditional"), *sup);
 }
 
 FString UItemFragment_StackableConditional::BP_GetStackKey_Implementation(const FInventoryItemInstance& InItem) const

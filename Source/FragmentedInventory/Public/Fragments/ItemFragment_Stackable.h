@@ -48,6 +48,7 @@ public:
 	// Override for conditional stacking (e.g., "empty", "full", "50%_durability")
 	virtual FString GetStackKey(const FInventoryItemInstance& InItem) const;
 
+	
 public:
 	// Maximum number of items that can stack in a single slot
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stackable", meta = (ClampMin = "1", ClampMax = "9999"))

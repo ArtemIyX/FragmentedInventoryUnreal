@@ -23,8 +23,6 @@ public:
 	UItemFragment_Base(const FObjectInitializer& ObjectInitializer = FObjectInitializer());
 
 protected:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Fragment")
-	FGameplayTagContainer GrantItemTags;
 
 protected:
 	virtual void GrantTags(FGameplayTagContainer& ItemTags) const;
@@ -47,7 +45,15 @@ public:
 	virtual void OnItemDestroyed(FInventoryItemInstance* ItemInstance, const FInstancedStruct& InDynamicData) const;
 
 public:
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Fragment|Instance")
+	FGameplayTagContainer AdditionalItemTags;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Fragment|CPP")
+	FGameplayTagContainer DefaultItemTags;
+
 	// Display name for editor/debugging
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Fragment")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fragment|CPP", meta = (DisableEditOnInstance))
 	FText FragmentDisplayName;
+
 };

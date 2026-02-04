@@ -43,6 +43,8 @@ public:
 	virtual const UScriptStruct* GetDynamicDataStructType() const override;
 	virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const override;
 
+	virtual FString GetDebugString(const FInstancedStruct& InDynamicData) const override;
+	
 public:
 	// Maximum durability value
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability", meta = (ClampMin = "1.0", ClampMax = "10000.0"))

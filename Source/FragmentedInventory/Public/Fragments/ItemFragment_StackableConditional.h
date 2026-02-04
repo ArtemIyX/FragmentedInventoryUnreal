@@ -27,6 +27,7 @@ public:
 	// Items with matching keys can stack together
 	virtual FString GetStackKey(const FInventoryItemInstance& InItem) const override;
 
+	virtual FString GetDebugString(const FInstancedStruct& InDynamicData) const override;
 protected:
 	// Blueprint implementable event for custom stack key generation
 	// Return a string that represents the "stackability group" of this item

@@ -32,3 +32,30 @@ void UItemFragment_Durability::InitializeDynamicData(FInstancedStruct& OutDynami
 		}
 	}
 }
+
+FString UItemFragment_Durability::GetDebugString(const FInstancedStruct& InDynamicData) const
+{
+	const FString super = Super::GetDebugString(InDynamicData);
+
+	if (InDynamicData.GetScriptStruct() != FDurabilityDynamicData::StaticStruct())
+	{
+		return super;
+	}
+
+	if (!InDynamicData.IsValid())
+	{
+		return super;
+	}
+
+	const FDurabilityDynamicData* dynamicData = InDynamicData.GetPtr<FDurabilityDynamicData>();
+	if (dynamicData == nullptr)
+	{
+		return super;
+	}
+
+	return FString::Printf(TEXT("%s - %f / %f (broken: %d)"),
+	                       *super,
+	                       dynamicData->CurrentDurability,
+	                       this->MaxDurability,
+	                       static_cast<int32>(dynamicData->bIsBroken));
+}

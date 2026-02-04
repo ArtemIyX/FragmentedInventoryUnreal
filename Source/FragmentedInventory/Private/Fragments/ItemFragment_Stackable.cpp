@@ -6,8 +6,8 @@
 
 UItemFragment_Stackable::UItemFragment_Stackable(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-	, MaxStackSize(99)
-	, bAllowStackingWithDifferentData(true)
+	  , MaxStackSize(99)
+	  , bAllowStackingWithDifferentData(true)
 {
 	FragmentDisplayName = FText::FromString(TEXT("Stackable"));
 }
@@ -20,7 +20,7 @@ const UScriptStruct* UItemFragment_Stackable::GetDynamicDataStructType() const
 void UItemFragment_Stackable::InitializeDynamicData(FInstancedStruct& OutDynamicData) const
 {
 	Super::InitializeDynamicData(OutDynamicData);
-	
+
 	// Initialize with default stackable data
 	if (OutDynamicData.GetScriptStruct() == FStackableDynamicData::StaticStruct())
 	{
@@ -35,7 +35,7 @@ void UItemFragment_Stackable::InitializeDynamicData(FInstancedStruct& OutDynamic
 FString UItemFragment_Stackable::GetDebugString(const FInstancedStruct& InDynamicData) const
 {
 	const FString super = Super::GetDebugString(InDynamicData);
-	if (!InDynamicData.IsValid())
+	/*if (!InDynamicData.IsValid())
 	{
 		return super;
 	}
@@ -47,13 +47,14 @@ FString UItemFragment_Stackable::GetDebugString(const FInstancedStruct& InDynami
 	if (dynamicData == nullptr)
 	{
 		return super;
-	}
-	return super;
-	/*return FString::Printf(TEXT("%s: %d/%d"), *super,
-		dynamicData->);*/
+	}*/
+
+	return FString::Printf(TEXT("%s - Max Stack: %d"), *super,
+	                       MaxStackSize);
 }
 
-bool UItemFragment_Stackable::CanStackWith(const FInventoryItemInstance& InItemA, const FInventoryItemInstance& InItemB) const
+bool UItemFragment_Stackable::CanStackWith(const FInventoryItemInstance& InItemA,
+                                           const FInventoryItemInstance& InItemB) const
 {
 	// Must be same item definition
 	if (InItemA.GetItemDataAsset() != InItemB.GetItemDataAsset())
@@ -72,13 +73,13 @@ FString UItemFragment_Stackable::GetStackKey(const FInventoryItemInstance& InIte
 {
 	// Default behavior: all instances of this item can stack together
 	// Return a constant key for unconditional stacking (like bullets, resources)
-	
+
 	if (bAllowStackingWithDifferentData)
 	{
 		// All instances stack together regardless of dynamic data
 		return TEXT("default");
 	}
-	
+
 	// If not allowing different data, use the instance ID as key
 	// This means each instance is unique and won't stack
 	return InItem.ItemInstanceID.ToString();
