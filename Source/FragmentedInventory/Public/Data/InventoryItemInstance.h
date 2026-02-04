@@ -49,7 +49,7 @@ public:
 
 		return DynamicFragmentData[fragmentIndex].GetPtr<T>();
 	}
-	
+
 	// Get fragment index from data asset
 	int32 GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const;
 
@@ -57,7 +57,7 @@ public:
 	const UItemDefinitionAsset* GetItemDataAsset() const { return ItemDataAsset.Get(); }
 
 	// Check if item is valid
-	bool IsValidData() const { return ItemInstanceID.IsValid(); }
+	bool IsValidData() const { return ItemInstanceID.IsValid() && !ItemDataAsset.IsNull(); }
 
 	void Reset();
 

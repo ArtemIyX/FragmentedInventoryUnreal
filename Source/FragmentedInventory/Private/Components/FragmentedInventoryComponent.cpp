@@ -14,6 +14,7 @@ UFragmentedInventoryComponent::UFragmentedInventoryComponent(const FObjectInitia
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
+	bUseNetworkPushModel = true;
 }
 
 void UFragmentedInventoryComponent::BeginPlay()
@@ -31,7 +32,22 @@ void UFragmentedInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeP
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(UFragmentedInventoryComponent, SlotList);
+	FDoRepLifetimeParams params;
+	params.bIsPushBased = true;
+	{
+		if (bUseNetworkPushModel)
+		{
+			params.Condition = COND_None;
+			params.RepNotifyCondition = REPNOTIFY_OnChanged;
+			DOREPLIFETIME_WITH_PARAMS_FAST(UFragmentedInventoryComponent, SlotList, params);
+		}
+		else
+		{
+			DOREPLIFETIME(UFragmentedInventoryComponent, SlotList);
+		}
+	}
+	
+	
 }
 
 void UFragmentedInventoryComponent::InitializeInventory(int32 InSlotCount, EInventorySlotType InDefaultSlotType)
@@ -44,6 +60,8 @@ void UFragmentedInventoryComponent::InitializeInventory(int32 InSlotCount, EInve
 
 	SlotList.OwnerComponent = this;
 	SlotList.InitializeSlots(InSlotCount, InDefaultSlotType);
+
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 	
 	UE_LOG(LogTemp, Log, TEXT("%hs:%d - Initialized inventory with %d slots"), __FUNCTION__, __LINE__, InSlotCount);
 }
@@ -99,6 +117,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 
 			// Mark for replication
 			SlotList.MarkItemDirty(*slot);
+			MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 			BroadcastSlotChanged(slotIndex);
 			OnItemAdded.Broadcast(slotIndex, InItemDataAsset, quantityToAdd);
 
@@ -138,12 +157,14 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 
 		// Mark for replication
 		SlotList.MarkItemDirty(*slot);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 		BroadcastSlotChanged(emptySlotIndex);
 		OnItemAdded.Broadcast(emptySlotIndex, InItemDataAsset, quantityToAdd);
 
 		OutSlotIndex = emptySlotIndex;
 	}
 
+	
 	return true;
 }
 
@@ -204,6 +225,7 @@ bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex, con
 
 		// Mark for replication
 		SlotList.MarkItemDirty(*slot);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 		BroadcastSlotChanged(emptySlotIndex);
 		OnItemAdded.Broadcast(emptySlotIndex, itemDataAsset, quantityToAdd);
 
@@ -248,6 +270,7 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 
 	// Mark for replication
 	SlotList.MarkItemDirty(*slot);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 	BroadcastSlotChanged(InSlotIndex);
 	OnItemAdded.Broadcast(InSlotIndex, InItemDataAsset, InQuantity);
 
@@ -296,6 +319,7 @@ bool UFragmentedInventoryComponent::AddItemToSlotWithInstance(int32 InSlotIndex,
 
 	// Mark for replication
 	SlotList.MarkItemDirty(*slot);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 	BroadcastSlotChanged(InSlotIndex);
 	OnItemAdded.Broadcast(InSlotIndex, itemDataAsset, InQuantity);
 
@@ -341,6 +365,7 @@ bool UFragmentedInventoryComponent::RemoveItem(const UItemDefinitionAsset* InIte
 			else
 			{
 				SlotList.MarkItemDirty(*slot);
+				MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 				BroadcastSlotChanged(slotIndex);
 			}
 
@@ -396,6 +421,7 @@ bool UFragmentedInventoryComponent::RemoveItemFromSlot(int32 InSlotIndex, int32 
 	else
 	{
 		SlotList.MarkItemDirty(*slot);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 		BroadcastSlotChanged(InSlotIndex);
 	}
 
@@ -428,6 +454,7 @@ void UFragmentedInventoryComponent::ClearSlot(int32 InSlotIndex)
 
 	// Mark for replication
 	SlotList.MarkItemDirty(*slot);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 	BroadcastSlotChanged(InSlotIndex);
 
 	if (IsValid(itemDataAsset) && quantity > 0)
@@ -472,6 +499,7 @@ bool UFragmentedInventoryComponent::SwapSlots(int32 InSlotIndexA, int32 InSlotIn
 	// Mark both for replication
 	SlotList.MarkItemDirty(*slotA);
 	SlotList.MarkItemDirty(*slotB);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 
 	BroadcastSlotChanged(InSlotIndexA);
 	BroadcastSlotChanged(InSlotIndexB);
@@ -535,10 +563,12 @@ bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSl
 		else
 		{
 			SlotList.MarkItemDirty(*fromSlot);
+			MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 			BroadcastSlotChanged(InFromSlotIndex);
 		}
 
 		SlotList.MarkItemDirty(*toSlot);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 		BroadcastSlotChanged(InToSlotIndex);
 		return true;
 	}
@@ -563,6 +593,7 @@ bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSl
 		}
 
 		SlotList.MarkItemDirty(*toSlot);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 		BroadcastSlotChanged(InToSlotIndex);
 		return true;
 	}
@@ -647,6 +678,7 @@ void UFragmentedInventoryComponent::SetSlotType(int32 InSlotIndex, EInventorySlo
 
 	slot->SlotType = InSlotType;
 	SlotList.MarkItemDirty(*slot);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 	BroadcastSlotChanged(InSlotIndex);
 }
 
@@ -667,6 +699,7 @@ void UFragmentedInventoryComponent::SetSlotRestrictionTags(int32 InSlotIndex, co
 
 	slot->SlotRestrictionTags = InRestrictionTags;
 	SlotList.MarkItemDirty(*slot);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 	BroadcastSlotChanged(InSlotIndex);
 }
 
@@ -687,6 +720,7 @@ void UFragmentedInventoryComponent::SetSlotLocked(int32 InSlotIndex, bool bInLoc
 
 	slot->bIsLocked = bInLocked;
 	SlotList.MarkItemDirty(*slot);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
 	BroadcastSlotChanged(InSlotIndex);
 }
 

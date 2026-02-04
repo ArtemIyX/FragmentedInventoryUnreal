@@ -15,6 +15,7 @@ void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType I
 		newSlot.CurrentStackSize = 0;
 		newSlot.bIsLocked = false;
 	}
+	MarkArrayDirty();
 }
 
 const FInventorySlot* FInventorySlotList::GetSlot(int32 InSlotIndex) const

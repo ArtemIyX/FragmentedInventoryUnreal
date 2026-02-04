@@ -42,6 +42,8 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
 	bool bAutoInitialize;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	bool bUseNetworkPushModel;
 protected:
 	// The actual inventory data
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Inventory")

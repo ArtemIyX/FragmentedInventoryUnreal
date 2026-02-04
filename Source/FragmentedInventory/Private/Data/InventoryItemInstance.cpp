@@ -5,7 +5,7 @@
 
 
 FInventoryItemInstance::FInventoryItemInstance()
-	: ItemInstanceID(FGuid::NewGuid())
+	: ItemInstanceID(FGuid())
 	  , ItemDataAsset(nullptr)
 	  , CachedItemDataAsset(nullptr)
 {
