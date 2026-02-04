@@ -57,8 +57,9 @@ public:
 	const UItemDefinitionAsset* GetItemDataAsset() const { return ItemDataAsset.Get(); }
 
 	// Check if item is valid
-	bool IsValidData() const { return ItemDataAsset.IsValid() && ItemInstanceID.IsValid(); }
+	bool IsValidData() const { return ItemInstanceID.IsValid(); }
 
+	void Reset();
 public:
 	// Unique identifier for this specific item instance
 	UPROPERTY(BlueprintReadOnly, Category = "Item")

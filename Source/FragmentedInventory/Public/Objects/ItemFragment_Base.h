@@ -3,10 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "StructUtils/InstancedStruct.h"
 #include "UObject/Object.h"
 #include "ItemFragment_Base.generated.h"
 
+struct FInventoryItemInstance;
 /**
  * 
  
@@ -19,18 +21,27 @@ class FRAGMENTEDINVENTORY_API UItemFragment_Base : public UObject
 public:
 	UItemFragment_Base(const FObjectInitializer& ObjectInitializer = FObjectInitializer());
 
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Fragment")
+	FGameplayTagContainer GrantItemTags;
+
+protected:
+	virtual void GrantTags(FGameplayTagContainer& ItemTags) const;
+	virtual void RemoveTags(FGameplayTagContainer& ItemTags) const;
 public:
 	// Returns the UScriptStruct type for this fragment's dynamic data
-	virtual const UScriptStruct* GetDynamicDataStructType() const PURE_VIRTUAL(UItemFragment_Base::GetDynamicDataStructType, return nullptr;);
+	virtual const UScriptStruct* GetDynamicDataStructType() const PURE_VIRTUAL(UItemFragment_Base::GetDynamicDataStructType, return nullptr;)
+
 
 	// Initialize dynamic data with default values from this fragment's CDO
 	virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const;
-
+	
 	// Called when item with this fragment is created
-	virtual void OnItemCreated(const FInstancedStruct& InDynamicData) const {}
+	virtual void OnItemCreated(FInventoryItemInstance* ItemInstance, const FInstancedStruct& InDynamicData) const;
 
 	// Called when item with this fragment is destroyed
-	virtual void OnItemDestroyed(const FInstancedStruct& InDynamicData) const {}
+	virtual void OnItemDestroyed(FInventoryItemInstance* ItemInstance, const FInstancedStruct& InDynamicData) const;
+
 
 public:
 	// Display name for editor/debugging

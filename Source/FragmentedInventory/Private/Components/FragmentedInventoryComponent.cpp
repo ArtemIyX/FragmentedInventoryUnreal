@@ -307,6 +307,7 @@ void UFragmentedInventoryComponent::ClearSlot(int32 InSlotIndex)
 	const int32 quantity = slot->CurrentStackSize;
 
 	// Clear the slot
+	slot->ItemInstance.Reset(); // Call fragment OnItemDestroyed
 	slot->ItemInstance = FInventoryItemInstance();
 	slot->CurrentStackSize = 0;
 

@@ -48,7 +48,7 @@ void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset*
 		DynamicFragmentData.Add(MoveTemp(dynamicData));
 
 		// Call fragment's OnItemCreated hook
-		fragment->OnItemCreated(DynamicFragmentData.Last());
+		fragment->OnItemCreated(this, DynamicFragmentData.Last());
 	}
 }
 
@@ -72,4 +72,33 @@ int32 FInventoryItemInstance::GetFragmentIndex(TSubclassOf<UItemFragment_Base> I
 	}
 
 	return INDEX_NONE;
+}
+
+void FInventoryItemInstance::Reset()
+{
+	if (!IsValidData())
+		return;
+
+	if (CachedItemDataAsset == nullptr)
+		return;
+
+	const TArray<TObjectPtr<UItemFragment_Base>>& fragments = CachedItemDataAsset->GetFragments();
+	for (const TObjectPtr<UItemFragment_Base>& fragment : fragments)
+	{
+		if (!IsValid(fragment))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Null fragment in ItemDataAsset %s"), __FUNCTION__, __LINE__,
+			       *CachedItemDataAsset->GetName());
+			continue;
+		}
+
+		// Call fragment's OnItemCreated hook
+		fragment->OnItemDestroyed(this, DynamicFragmentData.Last());
+	}
+
+	this->ItemInstanceID = FGuid();
+	this->CachedItemDataAsset = nullptr;
+	this->ItemDataAsset = nullptr;
+	this->DynamicFragmentData = {};
+	this->ItemTags = FGameplayTagContainer();
 }

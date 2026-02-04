@@ -12,7 +12,6 @@ void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType I
 		FInventorySlot& newSlot = Slots.AddDefaulted_GetRef();
 		newSlot.SlotIndex = slotIndex;
 		newSlot.SlotType = InDefaultSlotType;
-		newSlot.MaxStackSize = 99; // Default stack size
 		newSlot.CurrentStackSize = 0;
 		newSlot.bIsLocked = false;
 	}
