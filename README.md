@@ -484,6 +484,11 @@ void AMyCharacter::ServerMoveInventoryItem_Implementation(int32 fromSlot, int32 
 
 ---
 
+## Dependencies
+- [Advanced Asset](https://github.com/ArtemIyX/AdvancedAssetUnreal) Plugin
+
+---
+
 ## Best Practices
 
 ### 1. Fragment Design
