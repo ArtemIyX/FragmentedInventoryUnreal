@@ -4,14 +4,17 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Data/InventoryItemInstance.h"
-#include "Data/InventoryItemList.h"
+#include "Data/InventorySlotList.h"
+#include "Data/ItemDefinitionAsset.h"
 #include "FragmentedInventoryComponent.generated.h"
 
+// Delegate signatures
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotChanged, int32, SlotIndex, const FInventorySlot&, Slot);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemAdded, int32, SlotIndex, const UItemDefinitionAsset*, ItemDataAsset, int32, Quantity);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemRemoved, int32, SlotIndex, const UItemDefinitionAsset*, ItemDataAsset, int32, Quantity);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotsSwapped, int32, SlotIndexA, int32, SlotIndexB);
 
-class UItemDefinitionAsset;
-
-UCLASS(Blueprintable, BlueprintType, ClassGroup = (Inventory), meta = (BlueprintSpawnableComponent))
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class FRAGMENTEDINVENTORY_API UFragmentedInventoryComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -20,72 +23,135 @@ public:
 	UFragmentedInventoryComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 private:
-	// Find item index by ID
-	int32 FindItemIndexByID(const FGuid& InItemInstanceID) const;
+	// Internal helpers
+	void BroadcastSlotChanged(int32 InSlotIndex);
+	FInventorySlot* GetSlotMutable(int32 InSlotIndex);
+	
+	// Create a new item instance
+	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset) const;
+protected:
+	// Default number of slots to initialize
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	int32 DefaultSlotCount;
+
+	// Default slot type for initialization
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	EInventorySlotType DefaultSlotType;
+
+	// Whether to auto-initialize on begin play
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	bool bAutoInitialize;
 
 protected:
-	// The replicated inventory list
-	UPROPERTY(Replicated)
-	FInventoryItemList InventoryList;
+	// The actual inventory data
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Inventory")
+	FInventorySlotList SlotList;
 
-	// Maximum number of items (0 = unlimited)
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Configuration")
-	int32 MaxItemSlots = 20;
+	
 
-	// Can add item validation
-	virtual bool CanAddItem(const UItemDefinitionAsset* InItemDataAsset) const;
-
-public:
+protected:
+	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	virtual bool ReplicateSubobjects(class UActorChannel* Channel, class FOutBunch* Bunch,
-	                                 FReplicationFlags* RepFlags) override;
 
 public:
-	// Item management
+	// Initialize inventory with a specific number of slots
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool AddItem(const UItemDefinitionAsset* InItemDataAsset, int32& OutItemIndex);
+	void InitializeInventory(int32 InSlotCount, EInventorySlotType InDefaultSlotType = EInventorySlotType::General);
 
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool RemoveItemByIndex(int32 InItemIndex);
+	// Add item to inventory (finds best slot automatically)
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	bool AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool RemoveItemByID(const FGuid& InItemInstanceID);
+	// Add item to specific slot
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	bool AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
+	// Remove item from inventory (removes from first found slot)
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	bool RemoveItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
-	FInventoryItemInstance* FindItemByID_CPP(const FGuid& InItemInstanceID);
-	FInventoryItemInstance* GetItemByIndex_CPP(int32 InItemIndex);
+	// Remove item from specific slot
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	bool RemoveItemFromSlot(int32 InSlotIndex, int32 InQuantity = 1);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
-	bool FindItemByID_BP(const FGuid& InItemInstanceID, FInventoryItemInstance& OutInstance);
+	// Clear a slot completely
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	void ClearSlot(int32 InSlotIndex);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
-	bool GetItemByIndex_BP(int32 InItemIndex, FInventoryItemInstance& OutInstance);
+	// Swap two slots
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	bool SwapSlots(int32 InSlotIndexA, int32 InSlotIndexB);
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	int32 GetItemCount() const { return InventoryList.Items.Num(); }
+	// Move item from one slot to another (handles stacking)
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	bool MoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity = -1);
+
+	// Get slot by index
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
+	const FInventorySlot& GetSlot(int32 InSlotIndex) const;
+
+	// Check if slot is valid and exists
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
+	bool IsValidSlot(int32 InSlotIndex) const;
+
+	// Get number of slots
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
+	int32 GetSlotCount() const { return SlotList.GetSlotCount(); }
+
+	// Find first empty slot
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
+	int32 FindFirstEmptySlot(EInventorySlotType InSlotType = EInventorySlotType::General) const;
+
+	// Count how many of an item we have
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
+	int32 CountItem(const UItemDefinitionAsset* InItemDataAsset) const;
+
+	// Check if we have enough of an item
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
+	bool HasItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1) const;
+
+	// Get all slots
+	const FInventorySlotList& GetSlotList() const { return SlotList; }
+
+	// Set slot type
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	void SetSlotType(int32 InSlotIndex, EInventorySlotType InSlotType);
+
+	// Set slot restriction tags
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	void SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags);
+
+	// Lock/unlock a slot
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	void SetSlotLocked(int32 InSlotIndex, bool bInLocked);
+
+	// Get fragment dynamic data from item in slot
+	template <typename T>
+	T* GetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass)
+	{
+		FInventorySlot* slot = SlotList.GetSlotMutable(InSlotIndex);
+		if (slot == nullptr || slot->IsEmpty())
+		{
+			return nullptr;
+		}
+
+		return slot->ItemInstance.GetFragmentDynamicData<T>(InFragmentClass);
+	}
 
 public:
-	// Mark item as dirty for replication
-	void MarkItemDirty(int32 InItemIndex);
-	void MarkItemDirtyByID(const FGuid& InItemInstanceID);
+	// Delegates
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FOnSlotChanged OnSlotChanged;
 
-public:
-	// Events
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemAdded, const FInventoryItemInstance&, InItem, int32,
-	                                             InItemIndex);
-
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemRemoved, const FInventoryItemInstance&, InItem, int32,
-	                                             InItemIndex);
-
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemChanged, const FInventoryItemInstance&, InItem, int32,
-	                                             InItemIndex);
-
-	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnItemAdded OnItemAdded;
 
-	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnItemRemoved OnItemRemoved;
 
-	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
-	FOnItemChanged OnItemChanged;
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FOnSlotsSwapped OnSlotsSwapped;
+
+
+
 };
