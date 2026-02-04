@@ -92,8 +92,11 @@ void FInventoryItemInstance::Reset()
 			continue;
 		}
 
-		// Call fragment's OnItemCreated hook
-		fragment->OnItemDestroyed(this, DynamicFragmentData.Last());
+		const int32 fragmentIndex = CachedItemDataAsset->GetFragmentIndex(fragment->GetClass());
+		if (DynamicFragmentData.IsValidIndex(fragmentIndex))
+		{
+			fragment->OnItemDestroyed(this, DynamicFragmentData[fragmentIndex]);
+		}
 	}
 
 	this->ItemInstanceID = FGuid();

@@ -39,7 +39,7 @@ void UItemFragment_Base::OnItemDestroyed(FInventoryItemInstance* ItemInstance,
                                          const FInstancedStruct& InDynamicData) const
 {
 	if (ItemInstance)
-		GrantTags(ItemInstance->ItemTags);
+		RemoveTags(ItemInstance->ItemTags);
 }
 
 void UItemFragment_Base::GrantTags(FGameplayTagContainer& ItemTags) const

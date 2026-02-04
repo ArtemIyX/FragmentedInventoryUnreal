@@ -69,3 +69,4 @@ struct TStructOpsTypeTraits<FInventorySlotList> : public TStructOpsTypeTraitsBas
 		WithNetDeltaSerializer = true,
 	};
 };
+

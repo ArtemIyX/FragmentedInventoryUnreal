@@ -177,6 +177,18 @@ public:
 		return slot->ItemInstance.GetFragmentDynamicData<T>(InFragmentClass);
 	}
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
+	int32 GetTotalSlotCount() const;
+	
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
+	int32 GetUsedSlotCount() const;
+	
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
+	int32 GetEmptySlotCount() const;
+	
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
+	float GetInventoryUsagePercent() const;
+
 public:
 	// Delegates
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")

@@ -84,3 +84,9 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Slot")
 	bool bIsLocked;
 };
+
+template <>
+struct TStructOpsTypeTraits<FInventorySlot> : public TStructOpsTypeTraitsBase2<FInventorySlot>
+{
+	enum { WithCopy = false, };  // Fast array items should not be copied
+};

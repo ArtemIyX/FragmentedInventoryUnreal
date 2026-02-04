@@ -49,7 +49,7 @@ public:
 
 		return DynamicFragmentData[fragmentIndex].GetPtr<T>();
 	}
-
+	
 	// Get fragment index from data asset
 	int32 GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const;
 
@@ -60,14 +60,17 @@ public:
 	bool IsValidData() const { return ItemInstanceID.IsValid(); }
 
 	void Reset();
+
 public:
 	// Unique identifier for this specific item instance
 	UPROPERTY(BlueprintReadOnly, Category = "Item")
 	FGuid ItemInstanceID;
 
+
 	// Reference to the item data asset (the "blueprint" for this item)
 	UPROPERTY(BlueprintReadOnly, Category = "Item")
 	TSoftObjectPtr<UItemDefinitionAsset> ItemDataAsset;
+	//TODO: Replicated only FPrimaryAssetId
 
 	// Array of dynamic data for each fragment
 	// Indices match the fragment array in ItemDataAsset
