@@ -13,7 +13,8 @@ struct FInventoryItemInstance;
  * 
  
  */
-UCLASS(Blueprintable, BlueprintType, Abstract, DefaultToInstanced, EditInlineNew, DisplayName="Item Fragment (Abstract)")
+UCLASS(Blueprintable, BlueprintType, Abstract, DefaultToInstanced, EditInlineNew,
+	DisplayName="Item Fragment (Abstract)")
 class FRAGMENTEDINVENTORY_API UItemFragment_Base : public UObject
 {
 	GENERATED_BODY()
@@ -28,25 +29,23 @@ protected:
 protected:
 	virtual void GrantTags(FGameplayTagContainer& ItemTags) const;
 	virtual void RemoveTags(FGameplayTagContainer& ItemTags) const;
+
 public:
 	// Returns the UScriptStruct type for this fragment's dynamic data
-	virtual const UScriptStruct* GetDynamicDataStructType() const PURE_VIRTUAL(UItemFragment_Base::GetDynamicDataStructType, return nullptr;)
-
+	virtual const UScriptStruct* GetDynamicDataStructType() const PURE_VIRTUAL(
+		UItemFragment_Base::GetDynamicDataStructType, return nullptr;)
 
 	// Initialize dynamic data with default values from this fragment's CDO
 	virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const;
-	
+
 	// Called when item with this fragment is created
 	virtual void OnItemCreated(FInventoryItemInstance* ItemInstance, const FInstancedStruct& InDynamicData) const;
 
 	// Called when item with this fragment is destroyed
 	virtual void OnItemDestroyed(FInventoryItemInstance* ItemInstance, const FInstancedStruct& InDynamicData) const;
 
-
 public:
 	// Display name for editor/debugging
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Fragment")
 	FText FragmentDisplayName;
 };
-
-
