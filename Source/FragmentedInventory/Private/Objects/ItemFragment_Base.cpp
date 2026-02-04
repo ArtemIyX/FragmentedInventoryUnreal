@@ -1,7 +1,7 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Objects/Fragments/ItemFragment_Base.h"
+#include "Objects/ItemFragment_Base.h"
 
 UItemFragment_Base::UItemFragment_Base(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {

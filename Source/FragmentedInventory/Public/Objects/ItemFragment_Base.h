@@ -37,3 +37,5 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Fragment")
 	FText FragmentDisplayName;
 };
+
+

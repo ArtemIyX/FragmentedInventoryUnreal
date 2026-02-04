@@ -4,20 +4,19 @@
 
 #include "CoreMinimal.h"
 #include "Data/AdvancedDataAsset.h"
-#include "Objects/Fragments/ItemFragment_Base.h"
-#include "ItemDataAsset.generated.h"
+#include "Objects/ItemFragment_Base.h"
+#include "ItemDefinitionAsset.generated.h"
 
-class UItemFragment_Base;
 /**
  * 
  */
 UCLASS(Blueprintable, BlueprintType)
-class FRAGMENTEDINVENTORY_API UItemDataAsset : public UAdvancedDataAsset
+class FRAGMENTEDINVENTORY_API UItemDefinitionAsset : public UAdvancedDataAsset
 {
 	GENERATED_BODY()
 
 public:
-	UItemDataAsset();
+	UItemDefinitionAsset();
 
 public:
 	// Array of fragment instances that define this item's capabilities

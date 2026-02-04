@@ -1,21 +1,21 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Data/ItemDataAsset.h"
+#include "Data/ItemDefinitionAsset.h"
 
 #include "Misc/DataValidation.h"
-#include "Objects/Fragments/ItemFragment_Base.h"
+#include "Objects/ItemFragment_Base.h"
 
-UItemDataAsset::UItemDataAsset()
+UItemDefinitionAsset::UItemDefinitionAsset()
 {
-	AssetType = UItemDataAsset::ItemAssetManagerType;
+	AssetType = UItemDefinitionAsset::ItemAssetManagerType;
 	ItemDisplayName = FText::FromString(TEXT("New Item"));
 	ItemDescription = FText::GetEmpty();
 	ItemIcon = nullptr;
 }
 
 #if WITH_EDITOR
-EDataValidationResult UItemDataAsset::IsDataValid(class FDataValidationContext& Context) const
+EDataValidationResult UItemDefinitionAsset::IsDataValid(class FDataValidationContext& Context) const
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
 
@@ -57,7 +57,7 @@ EDataValidationResult UItemDataAsset::IsDataValid(class FDataValidationContext& 
 #endif
 
 
-UItemFragment_Base* UItemDataAsset::GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const
+UItemFragment_Base* UItemDefinitionAsset::GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const
 {
 	if (!InFragmentClass)
 	{
@@ -77,12 +77,12 @@ UItemFragment_Base* UItemDataAsset::GetFragmentByClass(TSubclassOf<UItemFragment
 	return nullptr;
 }
 
-bool UItemDataAsset::HasFragment(TSubclassOf<UItemFragment_Base> InFragmentClass) const
+bool UItemDefinitionAsset::HasFragment(TSubclassOf<UItemFragment_Base> InFragmentClass) const
 {
 	return GetFragmentByClass(InFragmentClass) != nullptr;
 }
 
-int32 UItemDataAsset::GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const
+int32 UItemDefinitionAsset::GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const
 {
 	if (!InFragmentClass)
 	{

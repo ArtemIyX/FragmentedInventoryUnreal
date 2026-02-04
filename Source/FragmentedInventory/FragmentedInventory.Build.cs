@@ -28,7 +28,7 @@ public class FragmentedInventory : ModuleRules
 			new string[]
 			{
 				"Core",
-				"AdvancedAsset", "CoreUObject"
+				"AdvancedAsset", "CoreUObject", "GameplayTags"
 				// ... add other public dependencies that you statically link with here ...
 			}
 		);
