@@ -10,6 +10,11 @@ UItemFragment_Base::UItemFragment_Base(const FObjectInitializer& ObjectInitializ
 	FragmentDisplayName = FText::FromString(TEXT("Base Fragment"));
 }
 
+FString UItemFragment_Base::GetDebugString(const FInstancedStruct& InDynamicData) const
+{
+	return FragmentDisplayName.ToString();
+}
+
 void UItemFragment_Base::InitializeDynamicData(FInstancedStruct& OutDynamicData) const
 {
 	const UScriptStruct* structType = GetDynamicDataStructType();

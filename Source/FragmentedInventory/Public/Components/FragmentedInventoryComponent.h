@@ -62,9 +62,48 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
 	bool AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
+	// Add item with pre-configured instance (for items with custom dynamic data like durability)
+	// Note: This will NOT stack with existing items, as each instance is unique
+	bool AddItemWithInstance(int32& OutSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity = 1);
+
+	// Add item with callback to configure dynamic data after creation
+	// Callback signature: void(FInventoryItemInstance& OutInstance)
+	template<typename CallbackType>
+	bool AddItemWithCallback(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity, CallbackType&& InConfigureCallback)
+	{
+		OutSlotIndex = INDEX_NONE;
+		if (GetOwnerRole() != ROLE_Authority)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemWithCallback called on non-authority"), __FUNCTION__, __LINE__);
+			return false;
+		}
+
+		if (!IsValid(InItemDataAsset))
+		{
+			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid ItemDataAsset"), __FUNCTION__, __LINE__);
+			return false;
+		}
+
+		if (InQuantity <= 0)
+		{
+			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid quantity: %d"), __FUNCTION__, __LINE__, InQuantity);
+			return false;
+		}
+
+		// Create new item instance and configure it
+		FInventoryItemInstance itemInstance = CreateItemInstance(InItemDataAsset);
+		InConfigureCallback(itemInstance);
+
+		// Use the instance-based add method
+		return AddItemWithInstance(OutSlotIndex, itemInstance, InQuantity);
+	}
+
 	// Add item to specific slot
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
 	bool AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
+
+	// Add item to specific slot with pre-configured instance
+	bool AddItemToSlotWithInstance(int32 InSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity = 1);
 
 	// Remove item from inventory (removes from first found slot)
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)

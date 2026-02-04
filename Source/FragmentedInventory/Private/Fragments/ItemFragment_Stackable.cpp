@@ -29,3 +29,24 @@ void UItemFragment_Stackable::InitializeDynamicData(FInstancedStruct& OutDynamic
 		}
 	}
 }
+
+FString UItemFragment_Stackable::GetDebugString(const FInstancedStruct& InDynamicData) const
+{
+	const FString super = Super::GetDebugString(InDynamicData);
+	if (!InDynamicData.IsValid())
+	{
+		return super;
+	}
+	if (InDynamicData.GetScriptStruct() != FStackableDynamicData::StaticStruct())
+	{
+		return super;
+	}
+	const FStackableDynamicData* dynamicData = InDynamicData.GetPtr<FStackableDynamicData>();
+	if (dynamicData == nullptr)
+	{
+		return super;
+	}
+	return super;
+	/*return FString::Printf(TEXT("%s: %d/%d"), *super,
+		dynamicData->);*/
+}

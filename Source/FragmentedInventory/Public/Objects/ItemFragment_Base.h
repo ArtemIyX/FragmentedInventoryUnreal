@@ -35,6 +35,8 @@ public:
 	virtual const UScriptStruct* GetDynamicDataStructType() const PURE_VIRTUAL(
 		UItemFragment_Base::GetDynamicDataStructType, return nullptr;)
 
+	virtual FString GetDebugString(const FInstancedStruct& InDynamicData) const;
+
 	// Initialize dynamic data with default values from this fragment's CDO
 	virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const;
 

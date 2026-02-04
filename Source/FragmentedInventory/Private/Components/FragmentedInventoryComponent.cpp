@@ -146,6 +146,72 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 	return true;
 }
 
+bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity)
+{
+	OutSlotIndex = INDEX_NONE;
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemWithInstance called on non-authority"), __FUNCTION__, __LINE__);
+		return false;
+	}
+
+	const UItemDefinitionAsset* itemDataAsset = InItemInstance.GetItemDataAsset();
+	if (!IsValid(itemDataAsset))
+	{
+		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid ItemDataAsset in instance"), __FUNCTION__, __LINE__);
+		return false;
+	}
+
+	if (InQuantity <= 0)
+	{
+		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid quantity: %d"), __FUNCTION__, __LINE__, InQuantity);
+		return false;
+	}
+
+	// Get the max stack size for this item type
+	const int32 itemMaxStackSize = itemDataAsset->GetMaxStackSize();
+	int32 remainingQuantity = InQuantity;
+
+	// NOTE: We do NOT try to stack with existing items when using pre-configured instances
+	// Each instance is unique (e.g., different durability values), so we always create new slots
+
+	// Add to empty slots
+	while (remainingQuantity > 0)
+	{
+		const int32 emptySlotIndex = SlotList.FindFirstEmptySlot(EInventorySlotType::General);
+		if (emptySlotIndex == INDEX_NONE)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - No empty slots available"), __FUNCTION__, __LINE__);
+			OutSlotIndex = INDEX_NONE;
+			return false;
+		}
+
+		FInventorySlot* slot = SlotList.GetSlotMutable(emptySlotIndex);
+		if (slot == nullptr)
+		{
+			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Failed to get slot at index %d"), __FUNCTION__, __LINE__, emptySlotIndex);
+			return false;
+		}
+
+		// Use the pre-configured item instance
+		slot->ItemInstance = InItemInstance;
+		
+		// Use the item's max stack size
+		const int32 quantityToAdd = FMath::Min(remainingQuantity, itemMaxStackSize);
+		slot->CurrentStackSize = quantityToAdd;
+		remainingQuantity -= quantityToAdd;
+
+		// Mark for replication
+		SlotList.MarkItemDirty(*slot);
+		BroadcastSlotChanged(emptySlotIndex);
+		OnItemAdded.Broadcast(emptySlotIndex, itemDataAsset, quantityToAdd);
+
+		OutSlotIndex = emptySlotIndex;
+	}
+
+	return true;
+}
+
 bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
 	if (GetOwnerRole() != ROLE_Authority)
@@ -183,6 +249,54 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 	SlotList.MarkItemDirty(*slot);
 	BroadcastSlotChanged(InSlotIndex);
 	OnItemAdded.Broadcast(InSlotIndex, InItemDataAsset, InQuantity);
+
+	return true;
+}
+
+bool UFragmentedInventoryComponent::AddItemToSlotWithInstance(int32 InSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemToSlotWithInstance called on non-authority"), __FUNCTION__, __LINE__);
+		return false;
+	}
+
+	const UItemDefinitionAsset* itemDataAsset = InItemInstance.GetItemDataAsset();
+	if (!IsValid(itemDataAsset))
+	{
+		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid ItemDataAsset in instance"), __FUNCTION__, __LINE__);
+		return false;
+	}
+
+	FInventorySlot* slot = SlotList.GetSlotMutable(InSlotIndex);
+	if (slot == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid slot index: %d"), __FUNCTION__, __LINE__, InSlotIndex);
+		return false;
+	}
+
+	if (!slot->CanAcceptItem(itemDataAsset, InQuantity))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Slot %d cannot accept item"), __FUNCTION__, __LINE__, InSlotIndex);
+		return false;
+	}
+
+	// If slot is empty, use the pre-configured instance
+	if (slot->IsEmpty())
+	{
+		slot->ItemInstance = InItemInstance;
+		slot->CurrentStackSize = InQuantity;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Cannot add pre-configured instance to non-empty slot %d (would overwrite existing item)"), __FUNCTION__, __LINE__, InSlotIndex);
+		return false;
+	}
+
+	// Mark for replication
+	SlotList.MarkItemDirty(*slot);
+	BroadcastSlotChanged(InSlotIndex);
+	OnItemAdded.Broadcast(InSlotIndex, itemDataAsset, InQuantity);
 
 	return true;
 }

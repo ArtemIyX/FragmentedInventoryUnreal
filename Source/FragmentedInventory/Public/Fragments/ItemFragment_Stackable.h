@@ -37,6 +37,7 @@ public:
 	// Initialize dynamic data
 	virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const override;
 
+	virtual FString GetDebugString(const FInstancedStruct& InDynamicData) const override;
 public:
 	// Maximum number of items that can stack in a single slot
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stackable", meta = (ClampMin = "1", ClampMax = "9999"))
