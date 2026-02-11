@@ -6,7 +6,7 @@
 void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType InDefaultSlotType)
 {
 	Slots.Empty(InSlotCount);
-	
+
 	for (int32 slotIndex = 0; slotIndex < InSlotCount; ++slotIndex)
 	{
 		FInventorySlot& newSlot = Slots.AddDefaulted_GetRef();
@@ -38,12 +38,28 @@ FInventorySlot* FInventorySlotList::GetSlotMutable(int32 InSlotIndex)
 	return &Slots[InSlotIndex];
 }
 
+int32 FInventorySlotList::FindFirstEmptySlot() const
+{
+	for (int32 slotIndex = 0; slotIndex < Slots.Num(); ++slotIndex)
+	{
+		const FInventorySlot& slot = Slots[slotIndex];
+
+		// Check if slot matches type and is empty
+		if (slot.IsEmpty() && !slot.bIsLocked)
+		{
+			return slotIndex;
+		}
+	}
+
+	return INDEX_NONE;
+}
+
 int32 FInventorySlotList::FindFirstEmptySlot(EInventorySlotType InSlotType) const
 {
 	for (int32 slotIndex = 0; slotIndex < Slots.Num(); ++slotIndex)
 	{
 		const FInventorySlot& slot = Slots[slotIndex];
-		
+
 		// Check if slot matches type and is empty
 		if (slot.SlotType == InSlotType && slot.IsEmpty() && !slot.bIsLocked)
 		{
@@ -65,7 +81,7 @@ int32 FInventorySlotList::FindSlotForItem(const UItemDefinitionAsset* InItemData
 	for (int32 slotIndex = 0; slotIndex < Slots.Num(); ++slotIndex)
 	{
 		const FInventorySlot& slot = Slots[slotIndex];
-		
+
 		if (!slot.IsEmpty() && slot.CanAcceptItem(InItemDataAsset, InQuantity))
 		{
 			return slotIndex;
@@ -76,7 +92,7 @@ int32 FInventorySlotList::FindSlotForItem(const UItemDefinitionAsset* InItemData
 	for (int32 slotIndex = 0; slotIndex < Slots.Num(); ++slotIndex)
 	{
 		const FInventorySlot& slot = Slots[slotIndex];
-		
+
 		if (slot.IsEmpty() && slot.CanAcceptItem(InItemDataAsset, InQuantity))
 		{
 			return slotIndex;
@@ -94,7 +110,7 @@ void FInventorySlotList::PreReplicatedRemove(const TArrayView<int32> RemovedIndi
 		if (Slots.IsValidIndex(removedIndex))
 		{
 			const FInventorySlot& slot = Slots[removedIndex];
-			
+
 			if (IsValid(OwnerComponent))
 			{
 				// Notify component about slot being removed/cleared
@@ -128,7 +144,7 @@ void FInventorySlotList::PostReplicatedChange(const TArrayView<int32> ChangedInd
 		if (Slots.IsValidIndex(changedIndex))
 		{
 			const FInventorySlot& slot = Slots[changedIndex];
-			
+
 			if (IsValid(OwnerComponent))
 			{
 				// Broadcast that this slot changed

@@ -20,12 +20,18 @@ UFragmentedInventoryComponent::UFragmentedInventoryComponent(const FObjectInitia
 void UFragmentedInventoryComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
+	
+	SlotList.OwnerComponent = this;
 	// Initialize inventory on authority
 	if (GetOwnerRole() == ROLE_Authority && bAutoInitialize)
 	{
 		InitializeInventory(DefaultSlotCount, DefaultSlotType);
 	}
+
+	/*if (GetOwnerRole() == ROLE_AutonomousProxy)
+	{
+		
+	}*/
 }
 
 void UFragmentedInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -127,7 +133,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 	// Add remaining quantity to empty slots
 	while (remainingQuantity > 0)
 	{
-		const int32 emptySlotIndex = SlotList.FindFirstEmptySlot(EInventorySlotType::General);
+		const int32 emptySlotIndex = SlotList.FindFirstEmptySlot();
 		if (emptySlotIndex == INDEX_NONE)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - No empty slots available"), __FUNCTION__, __LINE__);
@@ -197,7 +203,7 @@ bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex,
 	// Add to empty slots
 	while (remainingQuantity > 0)
 	{
-		const int32 emptySlotIndex = SlotList.FindFirstEmptySlot(EInventorySlotType::General);
+		const int32 emptySlotIndex = SlotList.FindFirstEmptySlot();
 		if (emptySlotIndex == INDEX_NONE)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - No empty slots available"), __FUNCTION__, __LINE__);
@@ -638,6 +644,11 @@ bool UFragmentedInventoryComponent::IsValidSlot(int32 InSlotIndex) const
 int32 UFragmentedInventoryComponent::FindFirstEmptySlot(EInventorySlotType InSlotType) const
 {
 	return SlotList.FindFirstEmptySlot(InSlotType);
+}
+
+int32 UFragmentedInventoryComponent::FindFirstEmptySlotAnyType() const
+{
+	return SlotList.FindFirstEmptySlot();
 }
 
 int32 UFragmentedInventoryComponent::CountItem(const UItemDefinitionAsset* InItemDataAsset) const

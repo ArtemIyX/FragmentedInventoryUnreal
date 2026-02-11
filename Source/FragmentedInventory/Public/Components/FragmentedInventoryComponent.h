@@ -66,7 +66,7 @@ public:
 	void InitializeInventory(int32 InSlotCount, EInventorySlotType InDefaultSlotType = EInventorySlotType::General);
 
 	// Add item to inventory (finds best slot automatically)
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
 	// Add item with pre-configured instance (for items with custom dynamic data like durability)
@@ -108,7 +108,7 @@ public:
 	}
 
 	// Add item to specific slot
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
 	// Add item to specific slot with pre-configured instance
@@ -116,23 +116,23 @@ public:
 	                               int32 InQuantity = 1);
 
 	// Remove item from inventory (removes from first found slot)
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool RemoveItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
 	// Remove item from specific slot
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool RemoveItemFromSlot(int32 InSlotIndex, int32 InQuantity = 1);
 
 	// Clear a slot completely
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void ClearSlot(int32 InSlotIndex);
 
 	// Swap two slots
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool SwapSlots(int32 InSlotIndexA, int32 InSlotIndexB);
 
 	// Move item from one slot to another (handles stacking)
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool MoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity = -1);
 
 	// Get slot by index
@@ -149,8 +149,13 @@ public:
 
 	// Find first empty slot
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
-	int32 FindFirstEmptySlot(EInventorySlotType InSlotType = EInventorySlotType::General) const;
+	int32 FindFirstEmptySlot(EInventorySlotType InSlotType) const;
 
+	// Find first empty slot
+	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
+	int32 FindFirstEmptySlotAnyType() const;
+
+	
 	// Count how many of an item we have
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
 	int32 CountItem(const UItemDefinitionAsset* InItemDataAsset) const;
@@ -163,15 +168,15 @@ public:
 	const FInventorySlotList& GetSlotList() const { return SlotList; }
 
 	// Set slot type
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void SetSlotType(int32 InSlotIndex, EInventorySlotType InSlotType);
 
 	// Set slot restriction tags
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags);
 
 	// Lock/unlock a slot
-	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void SetSlotLocked(int32 InSlotIndex, bool bInLocked);
 
 	// Get fragment dynamic data from item in slot

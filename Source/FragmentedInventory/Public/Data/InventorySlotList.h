@@ -34,7 +34,8 @@ public:
 	int32 GetSlotCount() const { return Slots.Num(); }
 
 	// Find first empty slot of a specific type
-	int32 FindFirstEmptySlot(EInventorySlotType InSlotType = EInventorySlotType::General) const;
+	int32 FindFirstEmptySlot() const;
+	int32 FindFirstEmptySlot(EInventorySlotType InSlotTyp) const;
 
 	// Find first slot that can accept the item (empty or stackable)
 	int32 FindSlotForItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1) const;
@@ -69,4 +70,3 @@ struct TStructOpsTypeTraits<FInventorySlotList> : public TStructOpsTypeTraitsBas
 		WithNetDeltaSerializer = true,
 	};
 };
-
