@@ -68,6 +68,7 @@ public:
         
 		return nullptr;
 	}
+	
 
 	// Get fragment instance by class
 	UItemFragment_Base* GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const;

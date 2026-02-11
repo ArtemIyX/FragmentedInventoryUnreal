@@ -10,8 +10,13 @@
 
 // Delegate signatures
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotChanged, int32, SlotIndex, const FInventorySlot&, Slot);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemAdded, int32, SlotIndex, const UItemDefinitionAsset*, ItemDataAsset, int32, Quantity);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemRemoved, int32, SlotIndex, const UItemDefinitionAsset*, ItemDataAsset, int32, Quantity);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemAdded, int32, SlotIndex, const UItemDefinitionAsset*,
+                                               ItemDataAsset, int32, Quantity);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemRemoved, int32, SlotIndex, const UItemDefinitionAsset*,
+                                               ItemDataAsset, int32, Quantity);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotsSwapped, int32, SlotIndexA, int32, SlotIndexB);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -26,10 +31,11 @@ private:
 	// Internal helpers
 	void BroadcastSlotChanged(int32 InSlotIndex);
 	FInventorySlot* GetSlotMutable(int32 InSlotIndex);
-	
+
 	// Create a new item instance
 	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset) const;
-protected:
+
+public:
 	// Default number of slots to initialize
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
 	int32 DefaultSlotCount;
@@ -44,12 +50,11 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
 	bool bUseNetworkPushModel;
+
 protected:
 	// The actual inventory data
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Inventory")
 	FInventorySlotList SlotList;
-
-	
 
 protected:
 	virtual void BeginPlay() override;
@@ -70,13 +75,15 @@ public:
 
 	// Add item with callback to configure dynamic data after creation
 	// Callback signature: void(FInventoryItemInstance& OutInstance)
-	template<typename CallbackType>
-	bool AddItemWithCallback(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity, CallbackType&& InConfigureCallback)
+	template <typename CallbackType>
+	bool AddItemWithCallback(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity,
+	                         CallbackType&& InConfigureCallback)
 	{
 		OutSlotIndex = INDEX_NONE;
 		if (GetOwnerRole() != ROLE_Authority)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemWithCallback called on non-authority"), __FUNCTION__, __LINE__);
+			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemWithCallback called on non-authority"), __FUNCTION__,
+			       __LINE__);
 			return false;
 		}
 
@@ -105,7 +112,8 @@ public:
 	bool AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1);
 
 	// Add item to specific slot with pre-configured instance
-	bool AddItemToSlotWithInstance(int32 InSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity = 1);
+	bool AddItemToSlotWithInstance(int32 InSlotIndex, const FInventoryItemInstance& InItemInstance,
+	                               int32 InQuantity = 1);
 
 	// Remove item from inventory (removes from first found slot)
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintAuthorityOnly)
@@ -181,13 +189,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
 	int32 GetTotalSlotCount() const;
-	
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
 	int32 GetUsedSlotCount() const;
-	
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
 	int32 GetEmptySlotCount() const;
-	
+
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
 	float GetInventoryUsagePercent() const;
 
@@ -204,7 +212,4 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnSlotsSwapped OnSlotsSwapped;
-
-
-
 };

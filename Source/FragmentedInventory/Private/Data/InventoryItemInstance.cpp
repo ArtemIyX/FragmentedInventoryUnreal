@@ -74,6 +74,29 @@ int32 FInventoryItemInstance::GetFragmentIndex(TSubclassOf<UItemFragment_Base> I
 	return INDEX_NONE;
 }
 
+UItemFragment_Base* FInventoryItemInstance::GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const
+{
+	// Try cached pointer first
+	if (IsValid(CachedItemDataAsset.Get()))
+	{
+		return CachedItemDataAsset->GetFragmentByClass(InFragmentClass);
+	}
+
+	// Load if needed
+	if (ItemDataAsset.IsValid())
+	{
+		const UItemDefinitionAsset* loadedAsset = ItemDataAsset.LoadSynchronous();
+		if (IsValid(loadedAsset))
+		{
+			CachedItemDataAsset = loadedAsset;
+			return loadedAsset->GetFragmentByClass(InFragmentClass);
+		}
+	}
+
+	return nullptr;
+}
+
+
 void FInventoryItemInstance::Reset()
 {
 	if (!IsValidData())

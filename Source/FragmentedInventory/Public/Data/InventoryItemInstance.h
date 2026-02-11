@@ -23,6 +23,28 @@ public:
 public:
 	// Initialize item from data asset
 	void InitializeFromDataAsset(const UItemDefinitionAsset* InItemDataAsset);
+	
+	template <typename T>
+	T* GetFragment() const
+	{
+		// Try cached pointer first
+		if (IsValid(CachedItemDataAsset.Get()))
+		{
+			return CachedItemDataAsset->GetFragment<T>();
+		}
+
+		// Load if needed
+		if (ItemDataAsset.IsValid())
+		{
+			const UItemDefinitionAsset* loadedAsset = ItemDataAsset.LoadSynchronous();
+			if (IsValid(loadedAsset))
+			{
+				CachedItemDataAsset = loadedAsset;
+				return loadedAsset->GetFragment<T>();
+			}
+		}
+		return nullptr;
+	}
 
 	// Get dynamic data for a specific fragment type
 	template <typename T>
@@ -52,6 +74,8 @@ public:
 
 	// Get fragment index from data asset
 	int32 GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const;
+	UItemFragment_Base* GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const;
+
 
 	// Get the item data asset
 	const UItemDefinitionAsset* GetItemDataAsset() const { return ItemDataAsset.Get(); }

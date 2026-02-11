@@ -58,6 +58,7 @@ public:
 	// Get maximum stack size for current item in slot (queries item's Stackable fragment)
 	int32 GetMaxStackSize() const;
 
+
 public:
 	// The index of this slot in the inventory (fixed)
 	UPROPERTY(BlueprintReadOnly, Category = "Slot")
