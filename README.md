@@ -246,7 +246,8 @@ Fast Array container for all inventory slots. Handles replication efficiently.
 - `GetSlot(SlotIndex)`: Get const slot reference
 - `GetSlotMutable(SlotIndex)`: Get mutable slot reference
 - `FindFirstEmptySlot(SlotType)`: Find first empty slot of type
-- `FindSlotForItem(ItemDataAsset, Quantity)`: Find best slot for item (stackable or empty)
+- `FindSlotForItem(ItemDataAsset, Quantity)`: Find an empty compatible slot
+- `FindSlotForItemInstance(ItemInstance, Quantity)`: Find a compatible stack or empty slot for a specific instance
 
 **Replication Callbacks:**
 - `PreReplicatedRemove()`: Called before slots are removed

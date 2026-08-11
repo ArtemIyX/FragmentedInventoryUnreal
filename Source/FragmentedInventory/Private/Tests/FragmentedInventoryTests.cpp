@@ -89,6 +89,31 @@ bool FFragmentedInventoryFragmentInheritanceTest::RunTest(const FString& Paramet
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryConditionalSlotSearchTest,
+	"FragmentedInventory.Inventory.ConditionalSlotSearch",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryConditionalSlotSearchTest::RunTest(const FString& Parameters)
+{
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	ItemDefinition->Fragments.Add(NewObject<UItemFragment_StackableConditional>(ItemDefinition));
+
+	FInventoryItemInstance ExistingItemInstance;
+	ExistingItemInstance.InitializeFromDataAsset(ItemDefinition);
+	FInventoryItemInstance CandidateItemInstance;
+	CandidateItemInstance.InitializeFromDataAsset(ItemDefinition);
+
+	FInventorySlotList SlotList;
+	SlotList.InitializeSlots(2);
+	SlotList.Slots[0].ItemInstance = MoveTemp(ExistingItemInstance);
+	SlotList.Slots[0].CurrentStackSize = 1;
+
+	TestEqual(TEXT("Definition-only slot search returns an empty compatible slot"), SlotList.FindSlotForItem(ItemDefinition), 1);
+	TestEqual(TEXT("Instance-aware slot search skips an incompatible conditional stack"), SlotList.FindSlotForItemInstance(CandidateItemInstance), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FFragmentedInventoryConditionalStackTest,
 	"FragmentedInventory.Inventory.ConditionalStack",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)

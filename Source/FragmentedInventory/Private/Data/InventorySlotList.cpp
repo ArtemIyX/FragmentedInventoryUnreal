@@ -86,17 +86,36 @@ int32 FInventorySlotList::FindFirstEmptySlot(EInventorySlotType InSlotType) cons
 
 int32 FInventorySlotList::FindSlotForItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity) const
 {
-	if (!IsValid(InItemDataAsset))
+	if (!IsValid(InItemDataAsset) || InQuantity <= 0)
 	{
 		return INDEX_NONE;
 	}
 
-	// First, try to find a slot with the same item that can stack
+	for (int32 SlotIndex = 0; SlotIndex < Slots.Num(); ++SlotIndex)
+	{
+		const FInventorySlot& Slot = Slots[SlotIndex];
+		if (Slot.IsEmpty() && Slot.CanAcceptItem(InItemDataAsset, InQuantity))
+		{
+			return SlotIndex;
+		}
+	}
+
+	return INDEX_NONE;
+}
+
+int32 FInventorySlotList::FindSlotForItemInstance(const FInventoryItemInstance& InItemInstance, int32 InQuantity) const
+{
+	const UItemDefinitionAsset* ItemDataAsset = InItemInstance.GetItemDataAsset();
+	if (!InItemInstance.IsValidData() || !IsValid(ItemDataAsset) || InQuantity <= 0)
+	{
+		return INDEX_NONE;
+	}
+
 	for (int32 slotIndex = 0; slotIndex < Slots.Num(); ++slotIndex)
 	{
 		const FInventorySlot& slot = Slots[slotIndex];
 
-		if (!slot.IsEmpty() && slot.CanAcceptItem(InItemDataAsset, InQuantity))
+		if (!slot.IsEmpty() && slot.CanStackWith(InItemInstance) && slot.GetRemainingStackSpace() >= InQuantity)
 		{
 			return slotIndex;
 		}
@@ -107,7 +126,7 @@ int32 FInventorySlotList::FindSlotForItem(const UItemDefinitionAsset* InItemData
 	{
 		const FInventorySlot& slot = Slots[slotIndex];
 
-		if (slot.IsEmpty() && slot.CanAcceptItem(InItemDataAsset, InQuantity))
+		if (slot.IsEmpty() && slot.CanAcceptItem(ItemDataAsset, InQuantity))
 		{
 			return slotIndex;
 		}
