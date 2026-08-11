@@ -35,19 +35,6 @@ public:
 		return nullptr;
 	}
 
-	// Get dynamic data for a specific fragment type
-	template <typename T>
-	T* GetFragmentDynamicData(TSubclassOf<UItemFragment_Base> InFragmentClass)
-	{
-		const int32 fragmentIndex = GetFragmentIndex(InFragmentClass);
-		if (fragmentIndex == INDEX_NONE || !DynamicFragmentData.IsValidIndex(fragmentIndex))
-		{
-			return nullptr;
-		}
-
-		return DynamicFragmentData[fragmentIndex].GetMutablePtr<T>();
-	}
-
 	// Get const dynamic data for a specific fragment type
 	template <typename T>
 	const T* GetFragmentDynamicData(TSubclassOf<UItemFragment_Base> InFragmentClass) const
@@ -72,6 +59,12 @@ public:
 	/** @brief Checks an item definition by soft path without requiring the asset to be loaded. */
 	bool IsItemDataAsset(const UItemDefinitionAsset* InItemDataAsset) const;
 
+	/** @brief Returns true when the item definition has finished loading locally. */
+	bool IsItemDataAssetLoaded() const;
+
+	/** @brief Gets the replicated item-definition path for asynchronous loading. */
+	FSoftObjectPath GetItemDataAssetPath() const;
+
 	// Check if item is valid
 	bool IsValidData() const { return ItemInstanceID.IsValid() && !ItemDataAsset.IsNull(); }
 
@@ -87,11 +80,6 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Item")
 	TSoftObjectPtr<UItemDefinitionAsset> ItemDataAsset;
 
-	// Array of dynamic data for each fragment
-	// Indices match the fragment array in ItemDataAsset
-	UPROPERTY(BlueprintReadOnly, Category = "Item")
-	TArray<FInstancedStruct> DynamicFragmentData;
-
 	// Optional custom tags for gameplay queries
 	UPROPERTY(BlueprintReadOnly, Category = "Item")
 	FGameplayTagContainer ItemTags;
@@ -99,4 +87,12 @@ public:
 	// Cached pointer to loaded data asset (for fast access, not replicated)
 	UPROPERTY(Transient, NotReplicated)
 	mutable TObjectPtr<const UItemDefinitionAsset> CachedItemDataAsset;
+
+private:
+	friend class UFragmentedInventoryComponent;
+	friend class UFragmentedInventoryLib;
+
+	/** @brief Per-fragment runtime data. Mutate only through the inventory component. */
+	UPROPERTY(BlueprintReadOnly, Category = "Item", meta = (AllowPrivateAccess = "true"))
+	TArray<FInstancedStruct> DynamicFragmentData;
 };

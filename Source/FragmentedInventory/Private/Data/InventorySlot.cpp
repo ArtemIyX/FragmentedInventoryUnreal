@@ -31,14 +31,7 @@ int32 FInventorySlot::GetRemainingStackSpace() const
 
 bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity) const
 {
-	// Check if slot is locked
-	if (bIsLocked)
-	{
-		return false;
-	}
-
-	// Check if valid item data asset
-	if (!IsValid(InItemDataAsset))
+	if (!CanPlaceItem(InItemDataAsset))
 	{
 		return false;
 	}
@@ -49,7 +42,7 @@ bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, 
 		return false;
 	}
 
-	// If slot is empty, check only restriction tags
+	// If slot is empty, check the requested stack size.
 	if (IsEmpty())
 	{
 		const int32 MaxStackSize = InItemDataAsset->GetMaxStackSize();
@@ -58,12 +51,7 @@ bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, 
 			return false;
 		}
 
-		if (SlotRestrictionTags.IsEmpty())
-		{
-			return true;
-		}
-
-		return InItemDataAsset->GetItemTags().HasAny(SlotRestrictionTags);
+		return true;
 	}
 
 	// If slot has an item, check if we can stack
@@ -81,6 +69,16 @@ bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, 
 	// Check if we have space for the quantity
 	const int32 remainingSpace = GetRemainingStackSpace();
 	return remainingSpace >= InQuantity;
+}
+
+bool FInventorySlot::CanPlaceItem(const UItemDefinitionAsset* InItemDataAsset) const
+{
+	if (bIsLocked || !IsValid(InItemDataAsset))
+	{
+		return false;
+	}
+
+	return SlotRestrictionTags.IsEmpty() || InItemDataAsset->GetItemTags().HasAny(SlotRestrictionTags);
 }
 
 bool FInventorySlot::CanStackWith(const FInventoryItemInstance& InOtherItem) const

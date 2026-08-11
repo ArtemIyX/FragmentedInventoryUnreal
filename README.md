@@ -459,33 +459,34 @@ Query operations can be performed on any machine:
 
 ### Client Prediction
 
-The component permits local add, remove, move, and swap calls for UI prediction. The caller must send the same validated command to the server and reconcile rejected commands from the server's replicated state. Only authority marks Fast Array and push-model replication state dirty.
+`RequestMoveItem` is the only client-predicted operation. It accepts calls from
+the locally owned component only, permits one pending move, and sends a reliable
+component Server RPC with the current inventory revision. The server validates
+the revision and move. A rejection restores the local pre-move slots and forces
+authoritative Fast Array updates for both slots. The next prediction waits until
+both authoritative slot updates arrive.
 
-Item-added, item-removed, and slot-changed delegates are emitted after a multi-slot add or remove operation has completed. Listeners therefore observe the final inventory state rather than an intermediate state.
+`AddItem`, remove, clear, swap, direct `MoveItem`, slot configuration, and
+dynamic fragment-data changes are authority-only. Use `MoveItem` directly in
+standalone or on the listen-server host.
+
+`OnSlotChanged` is the replicated state event and fires for local and Fast Array
+updates. `OnItemAdded`, `OnItemRemoved`, and `OnSlotsSwapped` are local
+transaction events. They do not fire when a remote Fast Array update arrives.
 
 ### Replication Flow
 
-1. Client performs UI action (drag item, click button)
-2. Client calls RPC to server
-3. Server validates and performs operation
-4. Fast Array Serialization sends delta to clients
-5. `PostReplicatedChange` callback fires on clients
-6. Delegates broadcast to update UI
+1. Autonomous client calls `RequestMoveItem` and predicts one move.
+2. The component sends prediction ID and inventory revision to the server.
+3. The server accepts and mutates, or rejects and dirties both authoritative slots.
+4. Fast Array Serialization sends slot deltas to clients.
+5. `PostReplicatedAdd` or `PostReplicatedChange` fires `OnSlotChanged`.
+6. A pending prediction resolves only after both affected slots refresh.
 
-### Example RPC
+### Predicted Move
 
 ```cpp
-// In your player controller or character
-UFUNCTION(Server, Reliable)
-void ServerMoveInventoryItem(int32 fromSlot, int32 toSlot, int32 quantity);
-
-void AMyCharacter::ServerMoveInventoryItem_Implementation(int32 fromSlot, int32 toSlot, int32 quantity)
-{
-    if (UFragmentedInventoryComponent* inventory = FindComponentByClass<UFragmentedInventoryComponent>())
-    {
-        inventory->MoveItem(fromSlot, toSlot, quantity);
-    }
-}
+InventoryComponent->RequestMoveItem(FromSlot, ToSlot, Quantity);
 ```
 
 ---

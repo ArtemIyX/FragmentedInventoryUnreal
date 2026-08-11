@@ -8,6 +8,8 @@
 #include "Data/ItemDefinitionAsset.h"
 #include "FragmentedInventoryComponent.generated.h"
 
+struct FStreamableHandle;
+
 // Delegate signatures
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotChanged, int32, SlotIndex, const FInventorySlot&, Slot);
 
@@ -34,16 +36,57 @@ private:
 	/** @brief Marks an authoritative slot change for Fast Array and push-model replication. */
 	void MarkSlotDirty(FInventorySlot& InSlot);
 
+	/** @brief Commits an authoritative inventory transaction and advances its revision. */
+	void CommitAuthorityMutation();
+
+	/** @brief Forces current server slot state to replicate after a rejected prediction. */
+	void ForceAuthoritativeSlotRefresh(int32 InSlotIndex);
+
 	/** @brief Clears a slot without broadcasting item removal. */
 	bool ClearSlotInternal(int32 InSlotIndex, const UItemDefinitionAsset*& OutItemDataAsset, int32& OutQuantity);
 
 	/** @brief Finds an empty slot that accepts an item definition. */
 	int32 FindFirstEmptySlotForItem(const UItemDefinitionAsset* InItemDataAsset) const;
 
+	/** @brief Executes a move without changing the inventory revision. */
+	bool MoveItemInternal(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity);
+
+	/** @brief Executes a swap without changing the inventory revision. */
+	bool SwapSlotsInternal(int32 InSlotIndexA, int32 InSlotIndexB);
+
+	/** @brief Starts a non-blocking load for a replicated item definition. */
+	void EnsureItemDefinitionLoaded(const FInventoryItemInstance& InItemInstance);
+
+	/** @brief Checks whether each item definition needed by a predicted move is loaded. */
+	bool AreMoveItemDefinitionsLoaded(int32 InFromSlotIndex, int32 InToSlotIndex);
+
+	/** @brief Restores the local state captured before the pending prediction. */
+	void RollbackPendingMove();
+
+	/** @brief Clears a resolved prediction after its authoritative slot refresh. */
+	void ResolvePendingMoveIfRefreshed(int32 InSlotIndex);
+
 	FInventorySlot* GetSlotMutable(int32 InSlotIndex);
 
 	// Create a new item instance
 	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset) const;
+
+	struct FPendingMovePrediction
+	{
+		int32 PredictionId = INDEX_NONE;
+
+		int32 FromSlotIndex = INDEX_NONE;
+
+		int32 ToSlotIndex = INDEX_NONE;
+
+		FInventorySlot FromSlotBefore;
+
+		FInventorySlot ToSlotBefore;
+
+		bool bAwaitingFromSlotRefresh = false;
+
+		bool bAwaitingToSlotRefresh = false;
+	};
 
 public:
 	/** @brief Slot count created on authority during BeginPlay. Zero creates an empty inventory. */
@@ -67,9 +110,17 @@ protected:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Inventory")
 	FInventorySlotList SlotList;
 
+	/** @brief Monotonic server transaction revision used to reject stale predicted moves. */
+	UPROPERTY(ReplicatedUsing = OnRep_InventoryRevision, BlueprintReadOnly, Category = "Inventory")
+	int32 InventoryRevision;
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_InventoryRevision();
 
 public:
 	// Initialize inventory with a specific number of slots
@@ -91,7 +142,7 @@ public:
 	                         CallbackType&& InConfigureCallback)
 	{
 		OutSlotIndex = INDEX_NONE;
-		if (!IsValid(InItemDataAsset) || InQuantity <= 0)
+		if (GetOwnerRole() != ROLE_Authority || !IsValid(InItemDataAsset) || InQuantity <= 0)
 		{
 			return false;
 		}
@@ -129,6 +180,14 @@ public:
 	// Move item from one slot to another (handles stacking)
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool MoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity = -1);
+
+	/** @brief Predicts a locally owned move and submits it for authoritative validation. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Networking", meta = (ToolTip = "Predicts one locally owned move and submits it to the server. Additional predictions wait for authoritative reconciliation."))
+	bool RequestMoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity = -1);
+
+	/** @brief Replaces one fragment's runtime data on authority and marks its slot for replication. */
+	bool SetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass,
+		const FInstancedStruct& InDynamicData);
 
 	// Get slot by index
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
@@ -176,9 +235,9 @@ public:
 
 	// Get fragment dynamic data from item in slot
 	template <typename T>
-	T* GetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass)
+	const T* GetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass) const
 	{
-		FInventorySlot* slot = SlotList.GetSlotMutable(InSlotIndex);
+		const FInventorySlot* slot = SlotList.GetSlot(InSlotIndex);
 		if (slot == nullptr || slot->IsEmpty())
 		{
 			return nullptr;
@@ -186,6 +245,9 @@ public:
 
 		return slot->ItemInstance.GetFragmentDynamicData<T>(InFragmentClass);
 	}
+
+	/** @brief Handles an authoritative Fast Array slot update on this machine. */
+	void HandleReplicatedSlotChange(int32 InSlotIndex, const FInventorySlot& InSlot);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
 	int32 GetTotalSlotCount() const;
@@ -212,4 +274,27 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnSlotsSwapped OnSlotsSwapped;
+
+protected:
+	UFUNCTION(Server, Reliable)
+	void ServerRequestMoveItem(int32 InPredictionId, int32 InBaseRevision, int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity);
+
+	UFUNCTION(Client, Reliable)
+	void ClientAcknowledgeMoveItem(int32 InPredictionId, int32 InServerRevision);
+
+	UFUNCTION(Client, Reliable)
+	void ClientRejectMoveItem(int32 InPredictionId, int32 InServerRevision);
+
+private:
+#if WITH_DEV_AUTOMATION_TESTS
+	friend class FFragmentedInventoryPredictionRollbackTest;
+#endif
+
+	int32 NextPredictionId;
+
+	int32 ClientKnownInventoryRevision;
+
+	TOptional<FPendingMovePrediction> PendingMovePrediction;
+
+	TMap<FSoftObjectPath, TSharedPtr<FStreamableHandle>> PendingItemDefinitionLoads;
 };

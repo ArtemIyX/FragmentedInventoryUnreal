@@ -96,6 +96,16 @@ bool FInventoryItemInstance::IsItemDataAsset(const UItemDefinitionAsset* InItemD
 	return IsValid(InItemDataAsset) && ItemDataAsset.ToSoftObjectPath() == FSoftObjectPath(InItemDataAsset->GetPathName());
 }
 
+bool FInventoryItemInstance::IsItemDataAssetLoaded() const
+{
+	return IsValid(GetItemDataAsset());
+}
+
+FSoftObjectPath FInventoryItemInstance::GetItemDataAssetPath() const
+{
+	return ItemDataAsset.ToSoftObjectPath();
+}
+
 void FInventoryItemInstance::Reset()
 {
 	if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())

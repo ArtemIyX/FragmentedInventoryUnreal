@@ -131,7 +131,7 @@ void FInventorySlotList::PostReplicatedAdd(const TArrayView<int32> AddedIndices,
 			if (IsValid(OwnerComponent))
 			{
 				const FInventorySlot& Slot = Slots[addedIndex];
-				OwnerComponent->OnSlotChanged.Broadcast(Slot.SlotIndex, Slot);
+				OwnerComponent->HandleReplicatedSlotChange(Slot.SlotIndex, Slot);
 			}
 		}
 	}
@@ -148,8 +148,7 @@ void FInventorySlotList::PostReplicatedChange(const TArrayView<int32> ChangedInd
 
 			if (IsValid(OwnerComponent))
 			{
-				// Broadcast that this slot changed
-				OwnerComponent->OnSlotChanged.Broadcast(slot.SlotIndex, slot);
+				OwnerComponent->HandleReplicatedSlotChange(slot.SlotIndex, slot);
 			}
 		}
 	}

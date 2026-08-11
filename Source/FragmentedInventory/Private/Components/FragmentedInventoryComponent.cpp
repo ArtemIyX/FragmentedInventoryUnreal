@@ -1,6 +1,9 @@
 #include "Components/FragmentedInventoryComponent.h"
 
 #include "FragmentedInventory.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
+#include "GameFramework/Actor.h"
 #include "Logging/StructuredLog.h"
 #include "Net/Core/PushModel/PushModel.h"
 #include "Net/UnrealNetwork.h"
@@ -11,6 +14,9 @@ UFragmentedInventoryComponent::UFragmentedInventoryComponent(const FObjectInitia
 	, DefaultSlotType(EInventorySlotType::General)
 	, bAutoInitialize(true)
 	, bUseNetworkPushModel(true)
+	, InventoryRevision(0)
+	, NextPredictionId(1)
+	, ClientKnownInventoryRevision(0)
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
@@ -28,6 +34,13 @@ void UFragmentedInventoryComponent::BeginPlay()
 	}
 }
 
+void UFragmentedInventoryComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	PendingItemDefinitionLoads.Reset();
+	PendingMovePrediction.Reset();
+	Super::EndPlay(EndPlayReason);
+}
+
 void UFragmentedInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -39,10 +52,17 @@ void UFragmentedInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeP
 		Params.Condition = COND_None;
 		Params.RepNotifyCondition = REPNOTIFY_OnChanged;
 		DOREPLIFETIME_WITH_PARAMS_FAST(UFragmentedInventoryComponent, SlotList, Params);
+		DOREPLIFETIME_WITH_PARAMS_FAST(UFragmentedInventoryComponent, InventoryRevision, Params);
 		return;
 	}
 
 	DOREPLIFETIME(UFragmentedInventoryComponent, SlotList);
+	DOREPLIFETIME(UFragmentedInventoryComponent, InventoryRevision);
+}
+
+void UFragmentedInventoryComponent::OnRep_InventoryRevision()
+{
+	ClientKnownInventoryRevision = InventoryRevision;
 }
 
 void UFragmentedInventoryComponent::InitializeInventory(int32 InSlotCount, EInventorySlotType InDefaultSlotType)
@@ -61,10 +81,7 @@ void UFragmentedInventoryComponent::InitializeInventory(int32 InSlotCount, EInve
 
 	SlotList.OwnerComponent = this;
 	SlotList.InitializeSlots(InSlotCount, InDefaultSlotType);
-	if (bUseNetworkPushModel)
-	{
-		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
-	}
+	CommitAuthorityMutation();
 
 	for (int32 SlotIndex = 0; SlotIndex < SlotList.GetSlotCount(); ++SlotIndex)
 	{
@@ -75,6 +92,12 @@ void UFragmentedInventoryComponent::InitializeInventory(int32 InSlotCount, EInve
 bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
 	OutSlotIndex = INDEX_NONE;
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "AddItem called on non-authority");
+		return false;
+	}
+
 	if (!IsValid(InItemDataAsset) || InQuantity <= 0)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Warning, "AddItem received invalid item definition or quantity {Quantity}", InQuantity);
@@ -85,6 +108,13 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 	if (MaxStackSize <= 0)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Error, "Item definition {ItemDefinition} has invalid max stack size {MaxStackSize}", InItemDataAsset->GetName(), MaxStackSize);
+		return false;
+	}
+
+	FInventoryItemInstance CandidateItemInstance = CreateItemInstance(InItemDataAsset);
+	if (!CandidateItemInstance.IsValidData())
+	{
+		UE_LOGFMT(LogFragmentedInventory, Error, "Failed to create item instance for {ItemDefinition}", InItemDataAsset->GetName());
 		return false;
 	}
 
@@ -104,7 +134,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 				AvailableCapacity += MaxStackSize;
 			}
 		}
-		else if (Slot->CanAcceptItem(InItemDataAsset, 1))
+		else if (Slot->CanStackWith(CandidateItemInstance))
 		{
 			AvailableCapacity += FMath::Max(0, Slot->GetRemainingStackSpace());
 		}
@@ -128,7 +158,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 	for (int32 SlotIndex = 0; SlotIndex < SlotList.GetSlotCount() && RemainingQuantity > 0; ++SlotIndex)
 	{
 		FInventorySlot* Slot = SlotList.GetSlotMutable(SlotIndex);
-		if (Slot == nullptr || Slot->IsEmpty() || !Slot->CanAcceptItem(InItemDataAsset, 1))
+		if (Slot == nullptr || Slot->IsEmpty() || !Slot->CanStackWith(CandidateItemInstance))
 		{
 			continue;
 		}
@@ -147,6 +177,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 		OutSlotIndex = SlotIndex;
 	}
 
+	bool bUseCandidateItemInstance = true;
 	while (RemainingQuantity > 0)
 	{
 		const int32 EmptySlotIndex = FindFirstEmptySlotForItem(InItemDataAsset);
@@ -162,15 +193,17 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 		}
 
 		const int32 QuantityToAdd = FMath::Min(RemainingQuantity, MaxStackSize);
-		Slot->ItemInstance = CreateItemInstance(InItemDataAsset);
+		Slot->ItemInstance = bUseCandidateItemInstance ? MoveTemp(CandidateItemInstance) : CreateItemInstance(InItemDataAsset);
 		Slot->CurrentStackSize = QuantityToAdd;
 		RemainingQuantity -= QuantityToAdd;
 		MarkSlotDirty(*Slot);
 		ChangedSlotIndices.Add(EmptySlotIndex);
 		AddedQuantities.Add(QuantityToAdd);
 		OutSlotIndex = EmptySlotIndex;
+		bUseCandidateItemInstance = false;
 	}
 
+	CommitAuthorityMutation();
 	for (int32 ChangeIndex = 0; ChangeIndex < ChangedSlotIndices.Num(); ++ChangeIndex)
 	{
 		BroadcastSlotChanged(ChangedSlotIndices[ChangeIndex]);
@@ -183,6 +216,12 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity)
 {
 	OutSlotIndex = INDEX_NONE;
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "AddItemWithInstance called on non-authority");
+		return false;
+	}
+
 	const UItemDefinitionAsset* ItemDataAsset = InItemInstance.GetItemDataAsset();
 	if (!InItemInstance.IsValidData() || !IsValid(ItemDataAsset) || InQuantity <= 0)
 	{
@@ -249,6 +288,7 @@ bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex, con
 		bUseOriginalInstance = false;
 	}
 
+	CommitAuthorityMutation();
 	for (int32 ChangeIndex = 0; ChangeIndex < ChangedSlotIndices.Num(); ++ChangeIndex)
 	{
 		BroadcastSlotChanged(ChangedSlotIndices[ChangeIndex]);
@@ -260,6 +300,12 @@ bool UFragmentedInventoryComponent::AddItemWithInstance(int32& OutSlotIndex, con
 
 bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "AddItemToSlot called on non-authority");
+		return false;
+	}
+
 	if (!IsValid(InItemDataAsset) || InQuantity <= 0 || InItemDataAsset->GetMaxStackSize() <= 0)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Warning, "AddItemToSlot received invalid item definition or quantity {Quantity}", InQuantity);
@@ -280,10 +326,18 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 	}
 	else
 	{
+		FInventoryItemInstance CandidateItemInstance = CreateItemInstance(InItemDataAsset);
+		if (!CandidateItemInstance.IsValidData() || !Slot->CanStackWith(CandidateItemInstance))
+		{
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Slot {SlotIndex} cannot stack the requested item instance", InSlotIndex);
+			return false;
+		}
+
 		Slot->CurrentStackSize += InQuantity;
 	}
 
 	MarkSlotDirty(*Slot);
+	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
 	OnItemAdded.Broadcast(InSlotIndex, InItemDataAsset, InQuantity);
 	return true;
@@ -291,6 +345,12 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 
 bool UFragmentedInventoryComponent::AddItemToSlotWithInstance(int32 InSlotIndex, const FInventoryItemInstance& InItemInstance, int32 InQuantity)
 {
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "AddItemToSlotWithInstance called on non-authority");
+		return false;
+	}
+
 	const UItemDefinitionAsset* ItemDataAsset = InItemInstance.GetItemDataAsset();
 	if (!InItemInstance.IsValidData() || !IsValid(ItemDataAsset) || InQuantity <= 0 || ItemDataAsset->GetMaxStackSize() <= 0)
 	{
@@ -308,6 +368,7 @@ bool UFragmentedInventoryComponent::AddItemToSlotWithInstance(int32 InSlotIndex,
 	Slot->ItemInstance = InItemInstance;
 	Slot->CurrentStackSize = InQuantity;
 	MarkSlotDirty(*Slot);
+	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
 	OnItemAdded.Broadcast(InSlotIndex, ItemDataAsset, InQuantity);
 	return true;
@@ -315,6 +376,12 @@ bool UFragmentedInventoryComponent::AddItemToSlotWithInstance(int32 InSlotIndex,
 
 bool UFragmentedInventoryComponent::RemoveItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity)
 {
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "RemoveItem called on non-authority");
+		return false;
+	}
+
 	if (!IsValid(InItemDataAsset) || InQuantity <= 0)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Warning, "RemoveItem received invalid item definition or quantity {Quantity}", InQuantity);
@@ -369,6 +436,7 @@ bool UFragmentedInventoryComponent::RemoveItem(const UItemDefinitionAsset* InIte
 		RemovedQuantities.Add(QuantityToRemove);
 	}
 
+	CommitAuthorityMutation();
 	for (int32 ChangeIndex = 0; ChangeIndex < ChangedSlotIndices.Num(); ++ChangeIndex)
 	{
 		BroadcastSlotChanged(ChangedSlotIndices[ChangeIndex]);
@@ -380,6 +448,12 @@ bool UFragmentedInventoryComponent::RemoveItem(const UItemDefinitionAsset* InIte
 
 bool UFragmentedInventoryComponent::RemoveItemFromSlot(int32 InSlotIndex, int32 InQuantity)
 {
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "RemoveItemFromSlot called on non-authority");
+		return false;
+	}
+
 	if (InQuantity <= 0)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Warning, "RemoveItemFromSlot received invalid quantity {Quantity}", InQuantity);
@@ -409,6 +483,7 @@ bool UFragmentedInventoryComponent::RemoveItemFromSlot(int32 InSlotIndex, int32 
 		MarkSlotDirty(*Slot);
 	}
 
+	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
 	OnItemRemoved.Broadcast(InSlotIndex, ItemDataAsset, InQuantity);
 	return true;
@@ -416,6 +491,12 @@ bool UFragmentedInventoryComponent::RemoveItemFromSlot(int32 InSlotIndex, int32 
 
 void UFragmentedInventoryComponent::ClearSlot(int32 InSlotIndex)
 {
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "ClearSlot called on non-authority");
+		return;
+	}
+
 	FInventorySlot* Slot = SlotList.GetSlotMutable(InSlotIndex);
 	if (Slot == nullptr || Slot->bIsLocked)
 	{
@@ -430,6 +511,7 @@ void UFragmentedInventoryComponent::ClearSlot(int32 InSlotIndex)
 		return;
 	}
 
+	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
 	if (IsValid(ItemDataAsset) && Quantity > 0)
 	{
@@ -438,6 +520,23 @@ void UFragmentedInventoryComponent::ClearSlot(int32 InSlotIndex)
 }
 
 bool UFragmentedInventoryComponent::SwapSlots(int32 InSlotIndexA, int32 InSlotIndexB)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "SwapSlots called on non-authority");
+		return false;
+	}
+
+	const bool bSwapped = SwapSlotsInternal(InSlotIndexA, InSlotIndexB);
+	if (bSwapped && InSlotIndexA != InSlotIndexB)
+	{
+		CommitAuthorityMutation();
+	}
+
+	return bSwapped;
+}
+
+bool UFragmentedInventoryComponent::SwapSlotsInternal(int32 InSlotIndexA, int32 InSlotIndexB)
 {
 	FInventorySlot* SlotA = SlotList.GetSlotMutable(InSlotIndexA);
 	FInventorySlot* SlotB = SlotList.GetSlotMutable(InSlotIndexB);
@@ -452,6 +551,15 @@ bool UFragmentedInventoryComponent::SwapSlots(int32 InSlotIndexA, int32 InSlotIn
 		return true;
 	}
 
+	const UItemDefinitionAsset* ItemInSlotA = SlotA->ItemInstance.GetItemDataAsset();
+	const UItemDefinitionAsset* ItemInSlotB = SlotB->ItemInstance.GetItemDataAsset();
+	if ((!SlotA->IsEmpty() && !SlotB->CanPlaceItem(ItemInSlotA))
+		|| (!SlotB->IsEmpty() && !SlotA->CanPlaceItem(ItemInSlotB)))
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "Slots {SlotIndexA} and {SlotIndexB} violate slot restrictions when swapped", InSlotIndexA, InSlotIndexB);
+		return false;
+	}
+
 	Swap(SlotA->ItemInstance, SlotB->ItemInstance);
 	Swap(SlotA->CurrentStackSize, SlotB->CurrentStackSize);
 	MarkSlotDirty(*SlotA);
@@ -463,6 +571,23 @@ bool UFragmentedInventoryComponent::SwapSlots(int32 InSlotIndexA, int32 InSlotIn
 }
 
 bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "MoveItem called on non-authority. Use RequestMoveItem for a locally owned prediction.");
+		return false;
+	}
+
+	const bool bMoved = MoveItemInternal(InFromSlotIndex, InToSlotIndex, InQuantity);
+	if (bMoved && InFromSlotIndex != InToSlotIndex)
+	{
+		CommitAuthorityMutation();
+	}
+
+	return bMoved;
+}
+
+bool UFragmentedInventoryComponent::MoveItemInternal(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity)
 {
 	if (InQuantity != -1 && InQuantity <= 0)
 	{
@@ -556,7 +681,105 @@ bool UFragmentedInventoryComponent::MoveItem(int32 InFromSlotIndex, int32 InToSl
 		return true;
 	}
 
-	return QuantityToMove == FromSlot->CurrentStackSize && SwapSlots(InFromSlotIndex, InToSlotIndex);
+	return QuantityToMove == FromSlot->CurrentStackSize && SwapSlotsInternal(InFromSlotIndex, InToSlotIndex);
+}
+
+bool UFragmentedInventoryComponent::RequestMoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity)
+{
+	if (GetOwnerRole() == ROLE_Authority)
+	{
+		return MoveItem(InFromSlotIndex, InToSlotIndex, InQuantity);
+	}
+
+	AActor* Owner = GetOwner();
+	if (!IsValid(Owner) || !Owner->HasLocalNetOwner() || PendingMovePrediction.IsSet())
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "RequestMoveItem requires a locally owned inventory with no pending prediction");
+		return false;
+	}
+
+	if (!AreMoveItemDefinitionsLoaded(InFromSlotIndex, InToSlotIndex))
+	{
+		UE_LOGFMT(LogFragmentedInventory, Verbose, "RequestMoveItem waits for replicated item definitions to load");
+		return false;
+	}
+
+	const FInventorySlot* FromSlot = SlotList.GetSlot(InFromSlotIndex);
+	const FInventorySlot* ToSlot = SlotList.GetSlot(InToSlotIndex);
+	if (FromSlot == nullptr || ToSlot == nullptr)
+	{
+		return false;
+	}
+
+	FPendingMovePrediction NewPrediction;
+	NewPrediction.PredictionId = NextPredictionId++;
+	NewPrediction.FromSlotIndex = InFromSlotIndex;
+	NewPrediction.ToSlotIndex = InToSlotIndex;
+	NewPrediction.FromSlotBefore = *FromSlot;
+	NewPrediction.ToSlotBefore = *ToSlot;
+	NewPrediction.bAwaitingFromSlotRefresh = InFromSlotIndex != InToSlotIndex;
+	NewPrediction.bAwaitingToSlotRefresh = InFromSlotIndex != InToSlotIndex;
+	PendingMovePrediction = MoveTemp(NewPrediction);
+
+	if (!MoveItemInternal(InFromSlotIndex, InToSlotIndex, InQuantity))
+	{
+		PendingMovePrediction.Reset();
+		return false;
+	}
+
+	ServerRequestMoveItem(PendingMovePrediction->PredictionId, ClientKnownInventoryRevision, InFromSlotIndex, InToSlotIndex, InQuantity);
+	return true;
+}
+
+void UFragmentedInventoryComponent::ServerRequestMoveItem_Implementation(int32 InPredictionId, int32 InBaseRevision, int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	if (InBaseRevision != InventoryRevision || !MoveItemInternal(InFromSlotIndex, InToSlotIndex, InQuantity))
+	{
+		ForceAuthoritativeSlotRefresh(InFromSlotIndex);
+		ForceAuthoritativeSlotRefresh(InToSlotIndex);
+		ClientRejectMoveItem(InPredictionId, InventoryRevision);
+		return;
+	}
+
+	if (InFromSlotIndex != InToSlotIndex)
+	{
+		CommitAuthorityMutation();
+	}
+	ClientAcknowledgeMoveItem(InPredictionId, InventoryRevision);
+}
+
+void UFragmentedInventoryComponent::ClientAcknowledgeMoveItem_Implementation(int32 InPredictionId, int32 InServerRevision)
+{
+	ClientKnownInventoryRevision = InServerRevision;
+	if (!PendingMovePrediction.IsSet() || PendingMovePrediction->PredictionId != InPredictionId)
+	{
+		return;
+	}
+
+	if (PendingMovePrediction->FromSlotIndex == PendingMovePrediction->ToSlotIndex)
+	{
+		PendingMovePrediction.Reset();
+	}
+}
+
+void UFragmentedInventoryComponent::ClientRejectMoveItem_Implementation(int32 InPredictionId, int32 InServerRevision)
+{
+	ClientKnownInventoryRevision = InServerRevision;
+	if (!PendingMovePrediction.IsSet() || PendingMovePrediction->PredictionId != InPredictionId)
+	{
+		return;
+	}
+
+	RollbackPendingMove();
+	if (PendingMovePrediction->FromSlotIndex == PendingMovePrediction->ToSlotIndex)
+	{
+		PendingMovePrediction.Reset();
+	}
 }
 
 const FInventorySlot& UFragmentedInventoryComponent::GetSlot(int32 InSlotIndex) const
@@ -628,6 +851,7 @@ void UFragmentedInventoryComponent::SetSlotType(int32 InSlotIndex, EInventorySlo
 
 	Slot->SlotType = InSlotType;
 	MarkSlotDirty(*Slot);
+	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
 }
 
@@ -647,6 +871,7 @@ void UFragmentedInventoryComponent::SetSlotRestrictionTags(int32 InSlotIndex, co
 
 	Slot->SlotRestrictionTags = InRestrictionTags;
 	MarkSlotDirty(*Slot);
+	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
 }
 
@@ -666,6 +891,7 @@ void UFragmentedInventoryComponent::SetSlotLocked(int32 InSlotIndex, bool bInLoc
 
 	Slot->bIsLocked = bInLocked;
 	MarkSlotDirty(*Slot);
+	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
 }
 
@@ -700,6 +926,41 @@ float UFragmentedInventoryComponent::GetInventoryUsagePercent() const
 	return TotalSlotCount > 0 ? static_cast<float>(GetUsedSlotCount()) / static_cast<float>(TotalSlotCount) : 0.0f;
 }
 
+bool UFragmentedInventoryComponent::SetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass,
+	const FInstancedStruct& InDynamicData)
+{
+	if (GetOwnerRole() != ROLE_Authority || !InFragmentClass || !InDynamicData.IsValid())
+	{
+		return false;
+	}
+
+	FInventorySlot* Slot = SlotList.GetSlotMutable(InSlotIndex);
+	if (Slot == nullptr || Slot->IsEmpty())
+	{
+		return false;
+	}
+
+	const int32 FragmentIndex = Slot->ItemInstance.GetFragmentIndex(InFragmentClass);
+	if (!Slot->ItemInstance.DynamicFragmentData.IsValidIndex(FragmentIndex)
+		|| Slot->ItemInstance.DynamicFragmentData[FragmentIndex].GetScriptStruct() != InDynamicData.GetScriptStruct())
+	{
+		return false;
+	}
+
+	Slot->ItemInstance.DynamicFragmentData[FragmentIndex] = InDynamicData;
+	MarkSlotDirty(*Slot);
+	CommitAuthorityMutation();
+	BroadcastSlotChanged(InSlotIndex);
+	return true;
+}
+
+void UFragmentedInventoryComponent::HandleReplicatedSlotChange(int32 InSlotIndex, const FInventorySlot& InSlot)
+{
+	EnsureItemDefinitionLoaded(InSlot.ItemInstance);
+	OnSlotChanged.Broadcast(InSlotIndex, InSlot);
+	ResolvePendingMoveIfRefreshed(InSlotIndex);
+}
+
 void UFragmentedInventoryComponent::BroadcastSlotChanged(int32 InSlotIndex)
 {
 	const FInventorySlot* Slot = SlotList.GetSlot(InSlotIndex);
@@ -720,6 +981,34 @@ void UFragmentedInventoryComponent::MarkSlotDirty(FInventorySlot& InSlot)
 	if (bUseNetworkPushModel)
 	{
 		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
+	}
+}
+
+void UFragmentedInventoryComponent::CommitAuthorityMutation()
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	InventoryRevision = InventoryRevision == MAX_int32 ? 1 : InventoryRevision + 1;
+	if (bUseNetworkPushModel)
+	{
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, SlotList, this);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFragmentedInventoryComponent, InventoryRevision, this);
+	}
+}
+
+void UFragmentedInventoryComponent::ForceAuthoritativeSlotRefresh(int32 InSlotIndex)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	if (FInventorySlot* Slot = SlotList.GetSlotMutable(InSlotIndex))
+	{
+		MarkSlotDirty(*Slot);
 	}
 }
 
@@ -769,4 +1058,97 @@ FInventoryItemInstance UFragmentedInventoryComponent::CreateItemInstance(const U
 	}
 
 	return NewInstance;
+}
+
+void UFragmentedInventoryComponent::EnsureItemDefinitionLoaded(const FInventoryItemInstance& InItemInstance)
+{
+	if (InItemInstance.IsItemDataAssetLoaded())
+	{
+		return;
+	}
+
+	const FSoftObjectPath ItemDefinitionPath = InItemInstance.GetItemDataAssetPath();
+	if (!ItemDefinitionPath.IsValid() || PendingItemDefinitionLoads.Contains(ItemDefinitionPath))
+	{
+		return;
+	}
+
+	TSharedPtr<FStreamableHandle> LoadHandle = UAssetManager::Get().GetStreamableManager().RequestAsyncLoad(
+		ItemDefinitionPath,
+		FStreamableDelegate::CreateWeakLambda(this, [this, ItemDefinitionPath]()
+		{
+			PendingItemDefinitionLoads.Remove(ItemDefinitionPath);
+			for (int32 SlotIndex = 0; SlotIndex < SlotList.GetSlotCount(); ++SlotIndex)
+			{
+				const FInventorySlot* Slot = SlotList.GetSlot(SlotIndex);
+				if (Slot != nullptr && Slot->ItemInstance.GetItemDataAssetPath() == ItemDefinitionPath)
+				{
+					BroadcastSlotChanged(SlotIndex);
+				}
+			}
+		}));
+
+	if (LoadHandle.IsValid())
+	{
+		PendingItemDefinitionLoads.Add(ItemDefinitionPath, MoveTemp(LoadHandle));
+	}
+}
+
+bool UFragmentedInventoryComponent::AreMoveItemDefinitionsLoaded(int32 InFromSlotIndex, int32 InToSlotIndex)
+{
+	const FInventorySlot* FromSlot = SlotList.GetSlot(InFromSlotIndex);
+	const FInventorySlot* ToSlot = SlotList.GetSlot(InToSlotIndex);
+	if (FromSlot == nullptr || ToSlot == nullptr)
+	{
+		return false;
+	}
+
+	EnsureItemDefinitionLoaded(FromSlot->ItemInstance);
+	EnsureItemDefinitionLoaded(ToSlot->ItemInstance);
+	return FromSlot->ItemInstance.IsItemDataAssetLoaded()
+		&& (ToSlot->IsEmpty() || ToSlot->ItemInstance.IsItemDataAssetLoaded());
+}
+
+void UFragmentedInventoryComponent::RollbackPendingMove()
+{
+	if (!PendingMovePrediction.IsSet())
+	{
+		return;
+	}
+
+	FPendingMovePrediction& Prediction = PendingMovePrediction.GetValue();
+	FInventorySlot* FromSlot = SlotList.GetSlotMutable(Prediction.FromSlotIndex);
+	FInventorySlot* ToSlot = SlotList.GetSlotMutable(Prediction.ToSlotIndex);
+	if (FromSlot == nullptr || ToSlot == nullptr)
+	{
+		return;
+	}
+
+	*FromSlot = Prediction.FromSlotBefore;
+	*ToSlot = Prediction.ToSlotBefore;
+	BroadcastSlotChanged(Prediction.FromSlotIndex);
+	BroadcastSlotChanged(Prediction.ToSlotIndex);
+}
+
+void UFragmentedInventoryComponent::ResolvePendingMoveIfRefreshed(int32 InSlotIndex)
+{
+	if (!PendingMovePrediction.IsSet())
+	{
+		return;
+	}
+
+	FPendingMovePrediction& Prediction = PendingMovePrediction.GetValue();
+	if (InSlotIndex == Prediction.FromSlotIndex)
+	{
+		Prediction.bAwaitingFromSlotRefresh = false;
+	}
+	if (InSlotIndex == Prediction.ToSlotIndex)
+	{
+		Prediction.bAwaitingToSlotRefresh = false;
+	}
+
+	if (!Prediction.bAwaitingFromSlotRefresh && !Prediction.bAwaitingToSlotRefresh)
+	{
+		PendingMovePrediction.Reset();
+	}
 }
