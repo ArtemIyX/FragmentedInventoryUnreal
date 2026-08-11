@@ -33,18 +33,24 @@ EDataValidationResult UItemDefinitionAsset::IsDataValid(class FDataValidationCon
 	}
 
 	// Check for duplicate fragment types
-	TSet<UClass*> FragmentClasses;
+	TArray<const UClass*> FragmentClasses;
 	for (const UItemFragment_Base* fragment : Fragments)
 	{
 		if (IsValid(fragment))
 		{
-			if (FragmentClasses.Contains(fragment->GetClass()))
+			const UClass* FragmentClass = fragment->GetClass();
+			const bool bHasOverlappingFragmentClass = FragmentClasses.ContainsByPredicate(
+				[FragmentClass](const UClass* ExistingFragmentClass)
+				{
+					return FragmentClass->IsChildOf(ExistingFragmentClass) || ExistingFragmentClass->IsChildOf(FragmentClass);
+				});
+			if (bHasOverlappingFragmentClass)
 			{
 				Context.AddError(FText::FromString(
-					FString::Printf(TEXT("Duplicate fragment type: %s"), *fragment->GetClass()->GetName())));
+					FString::Printf(TEXT("Overlapping fragment class hierarchy: %s"), *FragmentClass->GetName())));
 				Result = EDataValidationResult::Invalid;
 			}
-			FragmentClasses.Add(fragment->GetClass());
+			FragmentClasses.Add(FragmentClass);
 		}
 	}
 

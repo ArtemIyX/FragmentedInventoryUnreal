@@ -47,6 +47,30 @@ bool FFragmentedInventoryItemResetTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryPolymorphicFragmentResetTest,
+	"FragmentedInventory.Inventory.PolymorphicFragmentReset",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryPolymorphicFragmentResetTest::RunTest(const FString& Parameters)
+{
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleDerivedTest* DerivedFragment = NewObject<UItemFragment_LifecycleDerivedTest>(ItemDefinition);
+	UItemFragment_LifecycleTest* BaseFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	ItemDefinition->Fragments.Add(DerivedFragment);
+	ItemDefinition->Fragments.Add(BaseFragment);
+
+	FInventoryItemInstance ItemInstance;
+	ItemInstance.InitializeFromDataAsset(ItemDefinition);
+	ItemInstance.Reset();
+
+	TestEqual(TEXT("Derived fragment receives one destruction callback"), DerivedFragment->GetDestroyedCallbackCount(), 1);
+	TestEqual(TEXT("Base fragment receives one destruction callback"), BaseFragment->GetDestroyedCallbackCount(), 1);
+	TestEqual(TEXT("Derived fragment receives matching dynamic data"), DerivedFragment->GetInvalidDestroyedDynamicDataCount(), 0);
+	TestEqual(TEXT("Base fragment receives matching dynamic data"), BaseFragment->GetInvalidDestroyedDynamicDataCount(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FFragmentedInventoryFragmentInheritanceTest,
 	"FragmentedInventory.Inventory.FragmentInheritance",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)

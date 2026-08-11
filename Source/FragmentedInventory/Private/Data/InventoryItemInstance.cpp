@@ -163,18 +163,22 @@ void FInventoryItemInstance::Reset()
 	if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())
 	{
 		const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = LoadedItemDataAsset->GetFragments();
-		for (const TObjectPtr<UItemFragment_Base>& Fragment : Fragments)
+		for (int32 FragmentIndex = 0; FragmentIndex < Fragments.Num(); ++FragmentIndex)
 		{
+			const UItemFragment_Base* Fragment = Fragments[FragmentIndex];
 			if (!IsValid(Fragment))
 			{
 				UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", LoadedItemDataAsset->GetName());
 				continue;
 			}
 
-			const int32 FragmentIndex = LoadedItemDataAsset->GetFragmentIndex(Fragment->GetClass());
 			if (DynamicFragmentData.IsValidIndex(FragmentIndex))
 			{
 				Fragment->OnItemDestroyed(this, DynamicFragmentData[FragmentIndex]);
+			}
+			else
+			{
+				UE_LOGFMT(LogFragmentedInventory, Warning, "Missing dynamic data for fragment {Fragment} while resetting item {ItemDefinition}", Fragment->GetName(), LoadedItemDataAsset->GetName());
 			}
 		}
 	}
