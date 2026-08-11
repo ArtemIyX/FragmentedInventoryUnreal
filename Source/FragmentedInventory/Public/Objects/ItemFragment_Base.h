@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -10,8 +10,8 @@
 
 struct FInventoryItemInstance;
 /**
- * 
- 
+ *
+
  */
 UCLASS(Blueprintable, BlueprintType, Abstract, DefaultToInstanced, EditInlineNew,
 	DisplayName="Item Fragment (Abstract)")
@@ -21,8 +21,6 @@ class FRAGMENTEDINVENTORY_API UItemFragment_Base : public UObject
 
 public:
 	UItemFragment_Base(const FObjectInitializer& ObjectInitializer = FObjectInitializer());
-
-protected:
 
 protected:
 	virtual void GrantTags(FGameplayTagContainer& ItemTags) const;
@@ -45,11 +43,14 @@ public:
 	// Called when item with this fragment is destroyed
 	virtual void OnItemDestroyed(FInventoryItemInstance* ItemInstance, const FInstancedStruct& InDynamicData) const;
 
+	/** @brief Appends this fragment's static tags to an item-definition tag container. */
+	void AppendItemTags(FGameplayTagContainer& OutItemTags) const;
+
 public:
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Fragment|Instance")
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Fragment|Instance", meta = (ToolTip = "Additional static tags granted to every instance of this item."))
 	FGameplayTagContainer AdditionalItemTags;
-	
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Fragment|CPP")
 	FGameplayTagContainer DefaultItemTags;
 

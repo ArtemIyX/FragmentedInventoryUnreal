@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -28,27 +28,38 @@ public:
 	UFragmentedInventoryComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 private:
-	// Internal helpers
+	/** @brief Broadcasts a changed slot after its mutation is complete. */
 	void BroadcastSlotChanged(int32 InSlotIndex);
+
+	/** @brief Marks an authoritative slot change for Fast Array and push-model replication. */
+	void MarkSlotDirty(FInventorySlot& InSlot);
+
+	/** @brief Clears a slot without broadcasting item removal. */
+	bool ClearSlotInternal(int32 InSlotIndex, const UItemDefinitionAsset*& OutItemDataAsset, int32& OutQuantity);
+
+	/** @brief Finds an empty slot that accepts an item definition. */
+	int32 FindFirstEmptySlotForItem(const UItemDefinitionAsset* InItemDataAsset) const;
+
 	FInventorySlot* GetSlotMutable(int32 InSlotIndex);
 
 	// Create a new item instance
 	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset) const;
 
 public:
-	// Default number of slots to initialize
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief Slot count created on authority during BeginPlay. Zero creates an empty inventory. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ClampMin = "0", ToolTip = "Slot count created on authority during BeginPlay. Zero creates an empty inventory."))
 	int32 DefaultSlotCount;
 
-	// Default slot type for initialization
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief Slot type assigned during automatic initialization. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ToolTip = "Slot type assigned during automatic initialization."))
 	EInventorySlotType DefaultSlotType;
 
-	// Whether to auto-initialize on begin play
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief When true, authority initializes slots during BeginPlay. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ToolTip = "When true, authority initializes slots during BeginPlay."))
 	bool bAutoInitialize;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief Uses push-model replication. This must match for every instance of the component class. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ToolTip = "Uses push-model replication. This must match for every instance of the component class."))
 	bool bUseNetworkPushModel;
 
 protected:
@@ -80,31 +91,15 @@ public:
 	                         CallbackType&& InConfigureCallback)
 	{
 		OutSlotIndex = INDEX_NONE;
-		if (GetOwnerRole() != ROLE_Authority)
+		if (!IsValid(InItemDataAsset) || InQuantity <= 0)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemWithCallback called on non-authority"), __FUNCTION__,
-			       __LINE__);
 			return false;
 		}
 
-		if (!IsValid(InItemDataAsset))
-		{
-			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid ItemDataAsset"), __FUNCTION__, __LINE__);
-			return false;
-		}
+		FInventoryItemInstance ItemInstance = CreateItemInstance(InItemDataAsset);
+		InConfigureCallback(ItemInstance);
 
-		if (InQuantity <= 0)
-		{
-			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid quantity: %d"), __FUNCTION__, __LINE__, InQuantity);
-			return false;
-		}
-
-		// Create new item instance and configure it
-		FInventoryItemInstance itemInstance = CreateItemInstance(InItemDataAsset);
-		InConfigureCallback(itemInstance);
-
-		// Use the instance-based add method
-		return AddItemWithInstance(OutSlotIndex, itemInstance, InQuantity);
+		return AddItemWithInstance(OutSlotIndex, ItemInstance, InQuantity);
 	}
 
 	// Add item to specific slot
@@ -155,7 +150,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
 	int32 FindFirstEmptySlotAnyType() const;
 
-	
+
 	// Count how many of an item we have
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
 	int32 CountItem(const UItemDefinitionAsset* InItemDataAsset) const;

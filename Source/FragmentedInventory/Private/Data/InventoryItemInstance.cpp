@@ -3,6 +3,8 @@
 
 #include "Data/InventoryItemInstance.h"
 
+#include "FragmentedInventory.h"
+#include "Logging/StructuredLog.h"
 
 FInventoryItemInstance::FInventoryItemInstance()
 	: ItemInstanceID(FGuid())
@@ -15,10 +17,11 @@ void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset*
 {
 	if (!IsValid(InItemDataAsset))
 	{
-		UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid ItemDataAsset passed to InitializeFromDataAsset"), __FUNCTION__,
-		       __LINE__);
+		UE_LOGFMT(LogFragmentedInventory, Error, "Invalid item definition passed to InitializeFromDataAsset");
 		return;
 	}
+
+	Reset();
 
 	// Generate new unique ID
 	ItemInstanceID = FGuid::NewGuid();
@@ -36,8 +39,7 @@ void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset*
 	{
 		if (!IsValid(fragment))
 		{
-			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Null fragment in ItemDataAsset %s"), __FUNCTION__, __LINE__,
-			       *InItemDataAsset->GetName());
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", InItemDataAsset->GetName());
 			DynamicFragmentData.AddDefaulted();
 			continue;
 		}
@@ -54,21 +56,9 @@ void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset*
 
 int32 FInventoryItemInstance::GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const
 {
-	// Try cached pointer first
-	if (IsValid(CachedItemDataAsset.Get()))
+	if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())
 	{
-		return CachedItemDataAsset->GetFragmentIndex(InFragmentClass);
-	}
-
-	// Load if needed
-	if (ItemDataAsset.IsValid())
-	{
-		const UItemDefinitionAsset* loadedAsset = ItemDataAsset.LoadSynchronous();
-		if (IsValid(loadedAsset))
-		{
-			CachedItemDataAsset = loadedAsset;
-			return loadedAsset->GetFragmentIndex(InFragmentClass);
-		}
+		return LoadedItemDataAsset->GetFragmentIndex(InFragmentClass);
 	}
 
 	return INDEX_NONE;
@@ -76,55 +66,60 @@ int32 FInventoryItemInstance::GetFragmentIndex(TSubclassOf<UItemFragment_Base> I
 
 UItemFragment_Base* FInventoryItemInstance::GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const
 {
-	// Try cached pointer first
-	if (IsValid(CachedItemDataAsset.Get()))
+	if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())
 	{
-		return CachedItemDataAsset->GetFragmentByClass(InFragmentClass);
-	}
-
-	// Load if needed
-	if (ItemDataAsset.IsValid())
-	{
-		const UItemDefinitionAsset* loadedAsset = ItemDataAsset.LoadSynchronous();
-		if (IsValid(loadedAsset))
-		{
-			CachedItemDataAsset = loadedAsset;
-			return loadedAsset->GetFragmentByClass(InFragmentClass);
-		}
+		return LoadedItemDataAsset->GetFragmentByClass(InFragmentClass);
 	}
 
 	return nullptr;
 }
 
 
+const UItemDefinitionAsset* FInventoryItemInstance::GetItemDataAsset() const
+{
+	if (IsValid(CachedItemDataAsset.Get()))
+	{
+		return CachedItemDataAsset.Get();
+	}
+
+	if (UItemDefinitionAsset* LoadedItemDataAsset = ItemDataAsset.Get())
+	{
+		CachedItemDataAsset = LoadedItemDataAsset;
+		return LoadedItemDataAsset;
+	}
+
+	return nullptr;
+}
+
+bool FInventoryItemInstance::IsItemDataAsset(const UItemDefinitionAsset* InItemDataAsset) const
+{
+	return IsValid(InItemDataAsset) && ItemDataAsset.ToSoftObjectPath() == FSoftObjectPath(InItemDataAsset->GetPathName());
+}
+
 void FInventoryItemInstance::Reset()
 {
-	if (!IsValidData())
-		return;
-
-	if (CachedItemDataAsset == nullptr)
-		return;
-
-	const TArray<TObjectPtr<UItemFragment_Base>>& fragments = CachedItemDataAsset->GetFragments();
-	for (const TObjectPtr<UItemFragment_Base>& fragment : fragments)
+	if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())
 	{
-		if (!IsValid(fragment))
+		const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = LoadedItemDataAsset->GetFragments();
+		for (const TObjectPtr<UItemFragment_Base>& Fragment : Fragments)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Null fragment in ItemDataAsset %s"), __FUNCTION__, __LINE__,
-			       *CachedItemDataAsset->GetName());
-			continue;
-		}
+			if (!IsValid(Fragment))
+			{
+				UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", LoadedItemDataAsset->GetName());
+				continue;
+			}
 
-		const int32 fragmentIndex = CachedItemDataAsset->GetFragmentIndex(fragment->GetClass());
-		if (DynamicFragmentData.IsValidIndex(fragmentIndex))
-		{
-			fragment->OnItemDestroyed(this, DynamicFragmentData[fragmentIndex]);
+			const int32 FragmentIndex = LoadedItemDataAsset->GetFragmentIndex(Fragment->GetClass());
+			if (DynamicFragmentData.IsValidIndex(FragmentIndex))
+			{
+				Fragment->OnItemDestroyed(this, DynamicFragmentData[FragmentIndex]);
+			}
 		}
 	}
 
-	this->ItemInstanceID = FGuid();
-	this->CachedItemDataAsset = nullptr;
-	this->ItemDataAsset = nullptr;
-	this->DynamicFragmentData = {};
-	this->ItemTags = FGameplayTagContainer();
+	ItemInstanceID = FGuid();
+	CachedItemDataAsset = nullptr;
+	ItemDataAsset = nullptr;
+	DynamicFragmentData.Reset();
+	ItemTags = FGameplayTagContainer();
 }

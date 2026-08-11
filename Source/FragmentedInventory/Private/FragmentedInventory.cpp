@@ -2,19 +2,49 @@
 
 #include "FragmentedInventory.h"
 
-#define LOCTEXT_NAMESPACE "FFragmentedInventoryModule"
+#include "Data/ItemDefinitionAsset.h"
+#include "Engine/AssetManager.h"
+#include "Engine/Engine.h"
+#include "Misc/CoreDelegates.h"
+
+DEFINE_LOG_CATEGORY(LogFragmentedInventory)
 
 void FFragmentedInventoryModule::StartupModule()
 {
-	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
+	if (GEngine != nullptr)
+	{
+		RegisterPrimaryAssets();
+		return;
+	}
+
+	PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FFragmentedInventoryModule::HandlePostEngineInit);
 }
 
 void FFragmentedInventoryModule::ShutdownModule()
 {
-	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
-	// we call this function before unloading the module.
+	if (PostEngineInitHandle.IsValid())
+	{
+		FCoreDelegates::OnPostEngineInit.Remove(PostEngineInitHandle);
+		PostEngineInitHandle.Reset();
+	}
 }
 
-#undef LOCTEXT_NAMESPACE
-	
+void FFragmentedInventoryModule::HandlePostEngineInit()
+{
+	PostEngineInitHandle.Reset();
+	RegisterPrimaryAssets();
+}
+
+void FFragmentedInventoryModule::RegisterPrimaryAssets()
+{
+	const TArray<FString> ItemDefinitionAssetScanPaths { TEXT("/Game"), TEXT("/FragmentedInventory") };
+	UAssetManager& AssetManager = UAssetManager::Get();
+	AssetManager.ScanPathsForPrimaryAssets(
+		UItemDefinitionAsset::PrimaryAssetType,
+		ItemDefinitionAssetScanPaths,
+		UItemDefinitionAsset::StaticClass(),
+		false,
+		false);
+}
+
 IMPLEMENT_MODULE(FFragmentedInventoryModule, FragmentedInventory)

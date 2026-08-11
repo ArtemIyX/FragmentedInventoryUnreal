@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -23,26 +23,15 @@ public:
 public:
 	// Initialize item from data asset
 	void InitializeFromDataAsset(const UItemDefinitionAsset* InItemDataAsset);
-	
+
 	template <typename T>
 	T* GetFragment() const
 	{
-		// Try cached pointer first
-		if (IsValid(CachedItemDataAsset.Get()))
+		if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())
 		{
-			return CachedItemDataAsset->GetFragment<T>();
+			return LoadedItemDataAsset->GetFragment<T>();
 		}
 
-		// Load if needed
-		if (ItemDataAsset.IsValid())
-		{
-			const UItemDefinitionAsset* loadedAsset = ItemDataAsset.LoadSynchronous();
-			if (IsValid(loadedAsset))
-			{
-				CachedItemDataAsset = loadedAsset;
-				return loadedAsset->GetFragment<T>();
-			}
-		}
 		return nullptr;
 	}
 
@@ -77,8 +66,11 @@ public:
 	UItemFragment_Base* GetFragmentByClass(TSubclassOf<UItemFragment_Base> InFragmentClass) const;
 
 
-	// Get the item data asset
-	const UItemDefinitionAsset* GetItemDataAsset() const { return ItemDataAsset.Get(); }
+	/** @brief Gets the already-loaded item definition without blocking. */
+	const UItemDefinitionAsset* GetItemDataAsset() const;
+
+	/** @brief Checks an item definition by soft path without requiring the asset to be loaded. */
+	bool IsItemDataAsset(const UItemDefinitionAsset* InItemDataAsset) const;
 
 	// Check if item is valid
 	bool IsValidData() const { return ItemInstanceID.IsValid() && !ItemDataAsset.IsNull(); }
@@ -94,7 +86,6 @@ public:
 	// Reference to the item data asset (the "blueprint" for this item)
 	UPROPERTY(BlueprintReadOnly, Category = "Item")
 	TSoftObjectPtr<UItemDefinitionAsset> ItemDataAsset;
-	//TODO: Replicated only FPrimaryAssetId
 
 	// Array of dynamic data for each fragment
 	// Indices match the fragment array in ItemDataAsset

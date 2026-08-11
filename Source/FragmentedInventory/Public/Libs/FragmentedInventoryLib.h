@@ -1,15 +1,16 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Data/InventoryItemInstance.h"
+#include "Data/InventorySlot.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 
 #include "FragmentedInventoryLib.generated.h"
 
-struct FInventorySlot;
 /**
- * 
+ *
  */
 UCLASS()
 class FRAGMENTEDINVENTORY_API UFragmentedInventoryLib : public UBlueprintFunctionLibrary
@@ -45,5 +46,5 @@ public:
 	static bool IsValidData(const FInventoryItemInstance& InItem);
 
 	UFUNCTION(BlueprintCallable, Category="Inventory|Item")
-	const UItemDefinitionAsset* GetItemDataAsset(const FInventoryItemInstance& InItem);
+	static const UItemDefinitionAsset* GetItemDataAsset(const FInventoryItemInstance& InItem);
 };

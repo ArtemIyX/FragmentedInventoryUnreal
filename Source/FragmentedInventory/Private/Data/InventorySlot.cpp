@@ -26,7 +26,7 @@ int32 FInventorySlot::GetMaxStackSize() const
 
 int32 FInventorySlot::GetRemainingStackSpace() const
 {
-	return GetMaxStackSize() - CurrentStackSize;
+	return FMath::Max(0, GetMaxStackSize() - CurrentStackSize);
 }
 
 bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity) const
@@ -52,16 +52,18 @@ bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, 
 	// If slot is empty, check only restriction tags
 	if (IsEmpty())
 	{
-		// If no restriction tags, accept any item
+		const int32 MaxStackSize = InItemDataAsset->GetMaxStackSize();
+		if (MaxStackSize <= 0 || InQuantity > MaxStackSize)
+		{
+			return false;
+		}
+
 		if (SlotRestrictionTags.IsEmpty())
 		{
 			return true;
 		}
 
-		// Check if item has any of the required tags
-		// TODO: This assumes items have tags - you may need to add ItemTags to ItemDefinitionAsset
-		// For now, we'll accept if no restrictions
-		return true;
+		return InItemDataAsset->GetItemTags().HasAny(SlotRestrictionTags);
 	}
 
 	// If slot has an item, check if we can stack

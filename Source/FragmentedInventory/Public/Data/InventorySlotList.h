@@ -46,7 +46,7 @@ public:
 	TArray<FInventorySlot> Slots;
 
 	// Owner component reference
-	UPROPERTY(NotReplicated)
+	UPROPERTY(Transient, NotReplicated)
 	TObjectPtr<UFragmentedInventoryComponent> OwnerComponent;
 
 	// Fast array callbacks

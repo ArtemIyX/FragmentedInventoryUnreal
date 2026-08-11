@@ -5,9 +5,10 @@
 
 void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType InDefaultSlotType)
 {
-	Slots.Empty(InSlotCount);
+	const int32 SlotCount = FMath::Max(0, InSlotCount);
+	Slots.Empty(SlotCount);
 
-	for (int32 slotIndex = 0; slotIndex < InSlotCount; ++slotIndex)
+	for (int32 slotIndex = 0; slotIndex < SlotCount; ++slotIndex)
 	{
 		FInventorySlot& newSlot = Slots.AddDefaulted_GetRef();
 		newSlot.SlotIndex = slotIndex;
@@ -127,10 +128,10 @@ void FInventorySlotList::PostReplicatedAdd(const TArrayView<int32> AddedIndices,
 	{
 		if (Slots.IsValidIndex(addedIndex))
 		{
-			// Slots were added - notify component
 			if (IsValid(OwnerComponent))
 			{
-				// You can add custom logic here if needed
+				const FInventorySlot& Slot = Slots[addedIndex];
+				OwnerComponent->OnSlotChanged.Broadcast(Slot.SlotIndex, Slot);
 			}
 		}
 	}
