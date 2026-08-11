@@ -330,7 +330,7 @@ float GetInventoryUsagePercent() const;
 ```cpp
 // Configure slot properties (authority only)
 void SetSlotType(int32 SlotIndex, EInventorySlotType SlotType);
-void SetSlotRestrictionTags(int32 SlotIndex, const FGameplayTagContainer& RestrictionTags);
+bool SetSlotRestrictionTags(int32 SlotIndex, const FGameplayTagContainer& RestrictionTags);
 void SetSlotLocked(int32 SlotIndex, bool bLocked);
 ```
 
@@ -433,7 +433,10 @@ void AMyPlayerController::OnInventorySlotChanged(int32 slotIndex, const FInvento
 // Create a weapons-only slot
 FGameplayTagContainer weaponTags;
 weaponTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Item.Type.Weapon")));
-InventoryComponent->SetSlotRestrictionTags(0, weaponTags);
+if (!InventoryComponent->SetSlotRestrictionTags(0, weaponTags))
+{
+    // The slot's current item does not satisfy the new restrictions.
+}
 InventoryComponent->SetSlotType(0, EInventorySlotType::Equipment);
 
 // Lock a slot (prevent modifications)

@@ -9,6 +9,7 @@
 #include "Fragments/ItemFragment_StackableConditional.h"
 #include "GameFramework/Actor.h"
 #include "Misc/AutomationTest.h"
+#include "Tests/ItemFragment_LifecycleTest.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FFragmentedInventorySlotCapacityTest,
@@ -211,6 +212,118 @@ bool FFragmentedInventoryPredictionRollbackTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("Rollback restores source quantity"), Inventory->SlotList.Slots[0].CurrentStackSize, 1);
 	TestTrue(TEXT("Rollback restores empty destination"), Inventory->SlotList.Slots[1].IsEmpty());
 	TestFalse(TEXT("Raw move cannot mutate an unowned non-authoritative component"), Inventory->MoveItem(0, 1));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryFullMoveLifecycleTest,
+	"FragmentedInventory.Inventory.FullMoveLifecycle",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryFullMoveLifecycleTest::RunTest(const FString& Parameters)
+{
+	AActor* Owner = NewObject<AActor>(GetTransientPackage());
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>(Owner);
+	Owner->AddOwnedComponent(Inventory);
+	Inventory->InitializeInventory(2);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleTest* LifecycleFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	ItemDefinition->Fragments.Add(LifecycleFragment);
+
+	TestTrue(TEXT("Item is added to the source slot"), Inventory->AddItemToSlot(0, ItemDefinition));
+	TestTrue(TEXT("Full move succeeds"), Inventory->MoveItem(0, 1));
+	TestTrue(TEXT("Source slot is empty after full move"), Inventory->GetSlot(0).IsEmpty());
+	TestFalse(TEXT("Destination slot contains the transferred item"), Inventory->GetSlot(1).IsEmpty());
+	TestEqual(TEXT("Full move does not create a second instance"), LifecycleFragment->GetCreatedCallbackCount(), 1);
+	TestEqual(TEXT("Full move does not destroy the transferred instance"), LifecycleFragment->GetDestroyedCallbackCount(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryExactMoveTest,
+	"FragmentedInventory.Inventory.ExactMove",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryExactMoveTest::RunTest(const FString& Parameters)
+{
+	AActor* Owner = NewObject<AActor>(GetTransientPackage());
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>(Owner);
+	Owner->AddOwnedComponent(Inventory);
+	Inventory->InitializeInventory(2);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_Stackable* StackableFragment = NewObject<UItemFragment_Stackable>(ItemDefinition);
+	StackableFragment->MaxStackSize = 10;
+	ItemDefinition->Fragments.Add(StackableFragment);
+
+	TestTrue(TEXT("Source stack is added"), Inventory->AddItemToSlot(0, ItemDefinition, 10));
+	TestTrue(TEXT("Target stack is added"), Inventory->AddItemToSlot(1, ItemDefinition, 5));
+	TestFalse(TEXT("Move rejects a quantity exceeding target capacity"), Inventory->MoveItem(0, 1, 10));
+	TestEqual(TEXT("Source quantity is unchanged after rejected move"), Inventory->GetSlot(0).CurrentStackSize, 10);
+	TestEqual(TEXT("Target quantity is unchanged after rejected move"), Inventory->GetSlot(1).CurrentStackSize, 5);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryRestrictionMutationTest,
+	"FragmentedInventory.Inventory.RestrictionMutation",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryRestrictionMutationTest::RunTest(const FString& Parameters)
+{
+	const FGameplayTag InputTag = FGameplayTag::RequestGameplayTag(FName(TEXT("Local.Input")), false);
+	const FGameplayTag MenuTag = FGameplayTag::RequestGameplayTag(FName(TEXT("Local.Menu")), false);
+	if (!InputTag.IsValid() || !MenuTag.IsValid())
+	{
+		AddError(TEXT("Required project gameplay tags are unavailable"));
+		return false;
+	}
+
+	AActor* Owner = NewObject<AActor>(GetTransientPackage());
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>(Owner);
+	Owner->AddOwnedComponent(Inventory);
+	Inventory->InitializeInventory(1);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	ItemDefinition->ItemTags.AddTag(InputTag);
+	TestTrue(TEXT("Input item enters unrestricted slot"), Inventory->AddItemToSlot(0, ItemDefinition));
+
+	FGameplayTagContainer MenuRestriction;
+	MenuRestriction.AddTag(MenuTag);
+	TestFalse(TEXT("Incompatible restriction change is rejected"), Inventory->SetSlotRestrictionTags(0, MenuRestriction));
+	TestTrue(TEXT("Occupied slot retains its item"), Inventory->GetSlot(0).ItemInstance.IsItemDataAsset(ItemDefinition));
+	TestTrue(TEXT("Occupied slot retains its old restriction tags"), Inventory->GetSlot(0).SlotRestrictionTags.IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryCandidateLifecycleTest,
+	"FragmentedInventory.Inventory.CandidateLifecycle",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryCandidateLifecycleTest::RunTest(const FString& Parameters)
+{
+	AActor* Owner = NewObject<AActor>(GetTransientPackage());
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>(Owner);
+	Owner->AddOwnedComponent(Inventory);
+	Inventory->InitializeInventory(2);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleTest* LifecycleFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	UItemFragment_Stackable* StackableFragment = NewObject<UItemFragment_Stackable>(ItemDefinition);
+	StackableFragment->MaxStackSize = 10;
+	ItemDefinition->Fragments.Add(LifecycleFragment);
+	ItemDefinition->Fragments.Add(StackableFragment);
+
+	int32 SlotIndex = INDEX_NONE;
+	TestTrue(TEXT("Initial stack is added"), Inventory->AddItem(SlotIndex, ItemDefinition, 5));
+	TestTrue(TEXT("Fully stacked addition succeeds"), Inventory->AddItem(SlotIndex, ItemDefinition, 5));
+	TestEqual(TEXT("Fully stacked addition cleans up its candidate instance"), LifecycleFragment->GetDestroyedCallbackCount(), 1);
+
+	TestTrue(TEXT("Inventory fills its final capacity"), Inventory->AddItem(SlotIndex, ItemDefinition, 10));
+	TestFalse(TEXT("Capacity failure rejects the addition"), Inventory->AddItem(SlotIndex, ItemDefinition, 1));
+	TestEqual(TEXT("Capacity failure cleans up its candidate instance"), LifecycleFragment->GetDestroyedCallbackCount(), 2);
 	return true;
 }
 

@@ -148,6 +148,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 	if (AvailableCapacity < InQuantity)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Warning, "Inventory lacks capacity for quantity {Quantity}", InQuantity);
+		CandidateItemInstance.Reset();
 		return false;
 	}
 
@@ -183,12 +184,20 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 		const int32 EmptySlotIndex = FindFirstEmptySlotForItem(InItemDataAsset);
 		if (!ensureMsgf(EmptySlotIndex != INDEX_NONE, TEXT("Inventory capacity changed during AddItem")))
 		{
+			if (bUseCandidateItemInstance)
+			{
+				CandidateItemInstance.Reset();
+			}
 			return false;
 		}
 
 		FInventorySlot* Slot = SlotList.GetSlotMutable(EmptySlotIndex);
 		if (!ensure(Slot != nullptr))
 		{
+			if (bUseCandidateItemInstance)
+			{
+				CandidateItemInstance.Reset();
+			}
 			return false;
 		}
 
@@ -201,6 +210,11 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 		AddedQuantities.Add(QuantityToAdd);
 		OutSlotIndex = EmptySlotIndex;
 		bUseCandidateItemInstance = false;
+	}
+
+	if (bUseCandidateItemInstance)
+	{
+		CandidateItemInstance.Reset();
 	}
 
 	CommitAuthorityMutation();
@@ -330,10 +344,12 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 		if (!CandidateItemInstance.IsValidData() || !Slot->CanStackWith(CandidateItemInstance))
 		{
 			UE_LOGFMT(LogFragmentedInventory, Warning, "Slot {SlotIndex} cannot stack the requested item instance", InSlotIndex);
+			CandidateItemInstance.Reset();
 			return false;
 		}
 
 		Slot->CurrentStackSize += InQuantity;
+		CandidateItemInstance.Reset();
 	}
 
 	MarkSlotDirty(*Slot);
@@ -623,22 +639,23 @@ bool UFragmentedInventoryComponent::MoveItemInternal(int32 InFromSlotIndex, int3
 			return false;
 		}
 
-		ToSlot->ItemInstance = FromSlot->ItemInstance;
-		if (QuantityToMove < FromSlot->CurrentStackSize)
+		const bool bTransfersEntireSource = QuantityToMove == FromSlot->CurrentStackSize;
+		if (bTransfersEntireSource)
 		{
+			ToSlot->ItemInstance = MoveTemp(FromSlot->ItemInstance);
+		}
+		else
+		{
+			ToSlot->ItemInstance = FromSlot->ItemInstance;
 			ToSlot->ItemInstance.ItemInstanceID = FGuid::NewGuid();
 		}
 
 		ToSlot->CurrentStackSize = QuantityToMove;
 		FromSlot->CurrentStackSize -= QuantityToMove;
-		if (FromSlot->CurrentStackSize == 0)
+		if (bTransfersEntireSource)
 		{
-			const UItemDefinitionAsset* RemovedItemDataAsset = nullptr;
-			int32 ClearedQuantity = 0;
-			if (!ensure(ClearSlotInternal(InFromSlotIndex, RemovedItemDataAsset, ClearedQuantity)))
-			{
-				return false;
-			}
+			FromSlot->ItemInstance = FInventoryItemInstance();
+			MarkSlotDirty(*FromSlot);
 		}
 		else
 		{
@@ -653,14 +670,14 @@ bool UFragmentedInventoryComponent::MoveItemInternal(int32 InFromSlotIndex, int3
 
 	if (ToSlot->CanStackWith(FromSlot->ItemInstance))
 	{
-		const int32 ActualQuantityToMove = FMath::Min(QuantityToMove, ToSlot->GetRemainingStackSpace());
-		if (ActualQuantityToMove <= 0)
+		if (ToSlot->GetRemainingStackSpace() < QuantityToMove)
 		{
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Target slot {SlotIndex} lacks capacity for requested quantity {Quantity}", InToSlotIndex, QuantityToMove);
 			return false;
 		}
 
-		ToSlot->CurrentStackSize += ActualQuantityToMove;
-		FromSlot->CurrentStackSize -= ActualQuantityToMove;
+		ToSlot->CurrentStackSize += QuantityToMove;
+		FromSlot->CurrentStackSize -= QuantityToMove;
 		if (FromSlot->CurrentStackSize == 0)
 		{
 			const UItemDefinitionAsset* RemovedItemDataAsset = nullptr;
@@ -855,24 +872,34 @@ void UFragmentedInventoryComponent::SetSlotType(int32 InSlotIndex, EInventorySlo
 	BroadcastSlotChanged(InSlotIndex);
 }
 
-void UFragmentedInventoryComponent::SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags)
+bool UFragmentedInventoryComponent::SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Warning, "SetSlotRestrictionTags called on non-authority");
-		return;
+		return false;
 	}
 
 	FInventorySlot* Slot = SlotList.GetSlotMutable(InSlotIndex);
 	if (Slot == nullptr)
 	{
-		return;
+		UE_LOGFMT(LogFragmentedInventory, Warning, "SetSlotRestrictionTags received invalid slot {SlotIndex}", InSlotIndex);
+		return false;
+	}
+
+	FInventorySlot CandidateSlot = *Slot;
+	CandidateSlot.SlotRestrictionTags = InRestrictionTags;
+	if (!Slot->IsEmpty() && !CandidateSlot.CanPlaceItem(Slot->ItemInstance.GetItemDataAsset()))
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "Slot {SlotIndex} rejects the proposed restriction tags for its current item", InSlotIndex);
+		return false;
 	}
 
 	Slot->SlotRestrictionTags = InRestrictionTags;
 	MarkSlotDirty(*Slot);
 	CommitAuthorityMutation();
 	BroadcastSlotChanged(InSlotIndex);
+	return true;
 }
 
 void UFragmentedInventoryComponent::SetSlotLocked(int32 InSlotIndex, bool bInLocked)

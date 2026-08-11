@@ -225,9 +225,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void SetSlotType(int32 InSlotIndex, EInventorySlotType InSlotType);
 
-	// Set slot restriction tags
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags);
+	/** @brief Updates restrictions when the current item remains valid. Returns false on non-authority, invalid slot, or incompatible item. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory", meta = (ToolTip = "Updates restrictions only if the current item remains valid. Returns false on non-authority, an invalid slot, or an incompatible item."))
+	bool SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags);
 
 	// Lock/unlock a slot
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
