@@ -16,6 +16,12 @@ bool UFragmentedInventoryLib::CanAcceptItem(const FInventorySlot& InSlot, const 
 	return InSlot.CanAcceptItem(InItemDataAsset, InQuantity);
 }
 
+bool UFragmentedInventoryLib::CanAcceptItemInstance(const FInventorySlot& InSlot,
+	const FInventoryItemInstance& InItemInstance, int32 InQuantity)
+{
+	return InSlot.CanAcceptItemInstance(InItemInstance, InQuantity);
+}
+
 bool UFragmentedInventoryLib::CanStackWith(const FInventorySlot& InSlot, const FInventoryItemInstance& InOtherItem)
 {
 	return InSlot.CanStackWith(InOtherItem);

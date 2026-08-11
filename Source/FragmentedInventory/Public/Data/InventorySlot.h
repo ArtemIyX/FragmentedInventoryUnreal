@@ -46,15 +46,21 @@ public:
 	// Check if slot is empty
 	bool IsEmpty() const { return !ItemInstance.IsValidData(); }
 
-	// Check if slot can accept an item
+	/** @brief Checks whether an empty slot accepts a definition and quantity. Use CanAcceptItemInstance for occupied stacks. */
 	bool CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1) const;
+
+	/** @brief Checks whether this slot accepts a specific item instance, including conditional stack policy. */
+	bool CanAcceptItemInstance(const FInventoryItemInstance& InItemInstance, int32 InQuantity = 1) const;
+
+	/** @brief Checks lock and tag restrictions without considering the current occupant. */
+	bool CanPlaceItem(const UItemDefinitionAsset* InItemDataAsset) const;
 
 	// Check if this slot can stack with another item
 	bool CanStackWith(const FInventoryItemInstance& InOtherItem) const;
 
 	// Get remaining stack space
 	int32 GetRemainingStackSpace() const;
-	
+
 	// Get maximum stack size for current item in slot (queries item's Stackable fragment)
 	int32 GetMaxStackSize() const;
 

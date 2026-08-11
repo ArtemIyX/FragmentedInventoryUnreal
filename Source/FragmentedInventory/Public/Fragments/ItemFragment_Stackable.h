@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -48,14 +48,13 @@ public:
 	// Override for conditional stacking (e.g., "empty", "full", "50%_durability")
 	virtual FString GetStackKey(const FInventoryItemInstance& InItem) const;
 
-	
+
 public:
-	// Maximum number of items that can stack in a single slot
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stackable", meta = (ClampMin = "1", ClampMax = "9999"))
+	/** @brief Maximum items per slot. Valid range is one through 9999. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stackable", meta = (ClampMin = "1", ClampMax = "9999", ToolTip = "Maximum items per slot. Valid range is one through 9999."))
 	int32 MaxStackSize;
 
-	// Whether items with different dynamic data can stack together
-	// (e.g., can damaged items stack with pristine items?)
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stackable")
+	/** @brief Allows instances with different dynamic data to share a stack. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stackable", meta = (ToolTip = "Allows instances with different dynamic data to share a stack."))
 	bool bAllowStackingWithDifferentData;
 };

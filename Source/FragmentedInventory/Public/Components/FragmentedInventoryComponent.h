@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -7,6 +7,8 @@
 #include "Data/InventorySlotList.h"
 #include "Data/ItemDefinitionAsset.h"
 #include "FragmentedInventoryComponent.generated.h"
+
+struct FStreamableHandle;
 
 // Delegate signatures
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotChanged, int32, SlotIndex, const FInventorySlot&, Slot);
@@ -28,27 +30,85 @@ public:
 	UFragmentedInventoryComponent(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 private:
-	// Internal helpers
+	/** @brief Broadcasts a changed slot after its mutation is complete. */
 	void BroadcastSlotChanged(int32 InSlotIndex);
+
+	/** @brief Broadcasts committed slot changes in mutation order. */
+	void BroadcastSlotChanges(const TArray<int32>& InSlotIndices);
+
+	/** @brief Marks an authoritative slot change for Fast Array and push-model replication. */
+	void MarkSlotDirty(FInventorySlot& InSlot);
+
+	/** @brief Commits an authoritative inventory transaction and advances its revision. */
+	void CommitAuthorityMutation();
+
+	/** @brief Forces current server slot state to replicate after a rejected prediction. */
+	void ForceAuthoritativeSlotRefresh(int32 InSlotIndex);
+
+	/** @brief Clears a slot without broadcasting item removal. */
+	bool ClearSlotInternal(int32 InSlotIndex, const UItemDefinitionAsset*& OutItemDataAsset, int32& OutQuantity,
+		bool bInInvokeDestroyedCallbacks = true);
+
+	/** @brief Finds an empty slot that accepts an item definition. */
+	int32 FindFirstEmptySlotForItem(const UItemDefinitionAsset* InItemDataAsset) const;
+
+	/** @brief Executes a move without changing the inventory revision. */
+	bool MoveItemInternal(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity,
+		TArray<int32>* OutChangedSlotIndices = nullptr, bool* bOutSlotsSwapped = nullptr);
+
+	/** @brief Executes a swap without changing the inventory revision. */
+	bool SwapSlotsInternal(int32 InSlotIndexA, int32 InSlotIndexB, TArray<int32>* OutChangedSlotIndices = nullptr);
+
+	/** @brief Starts a non-blocking load for a replicated item definition. */
+	void EnsureItemDefinitionLoaded(const FInventoryItemInstance& InItemInstance);
+
+	/** @brief Checks whether each item definition needed by a predicted move is loaded. */
+	bool AreMoveItemDefinitionsLoaded(int32 InFromSlotIndex, int32 InToSlotIndex);
+
+	/** @brief Restores the local state captured before the pending prediction. */
+	void RollbackPendingMove();
+
+	/** @brief Clears a resolved prediction after its authoritative slot refresh. */
+	void ResolvePendingMoveIfRefreshed(int32 InSlotIndex);
+
 	FInventorySlot* GetSlotMutable(int32 InSlotIndex);
 
 	// Create a new item instance
-	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset) const;
+	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset,
+		bool bInInvokeCreatedCallbacks = true) const;
+
+	struct FPendingMovePrediction
+	{
+		int32 PredictionId = INDEX_NONE;
+
+		int32 FromSlotIndex = INDEX_NONE;
+
+		int32 ToSlotIndex = INDEX_NONE;
+
+		FInventorySlot FromSlotBefore;
+
+		FInventorySlot ToSlotBefore;
+
+		bool bAwaitingFromSlotRefresh = false;
+
+		bool bAwaitingToSlotRefresh = false;
+	};
 
 public:
-	// Default number of slots to initialize
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief Slot count created on authority during BeginPlay. Zero creates an empty inventory. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ClampMin = "0", ToolTip = "Slot count created on authority during BeginPlay. Zero creates an empty inventory."))
 	int32 DefaultSlotCount;
 
-	// Default slot type for initialization
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief Slot type assigned during automatic initialization. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ToolTip = "Slot type assigned during automatic initialization."))
 	EInventorySlotType DefaultSlotType;
 
-	// Whether to auto-initialize on begin play
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief When true, authority initializes slots during BeginPlay. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ToolTip = "When true, authority initializes slots during BeginPlay."))
 	bool bAutoInitialize;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory")
+	/** @brief Uses push-model replication. This must match for every instance of the component class. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory", meta = (ToolTip = "Uses push-model replication. This must match for every instance of the component class."))
 	bool bUseNetworkPushModel;
 
 protected:
@@ -56,9 +116,17 @@ protected:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Inventory")
 	FInventorySlotList SlotList;
 
+	/** @brief Monotonic server transaction revision used to reject stale predicted moves. */
+	UPROPERTY(ReplicatedUsing = OnRep_InventoryRevision, BlueprintReadOnly, Category = "Inventory")
+	int32 InventoryRevision;
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_InventoryRevision();
 
 public:
 	// Initialize inventory with a specific number of slots
@@ -80,31 +148,15 @@ public:
 	                         CallbackType&& InConfigureCallback)
 	{
 		OutSlotIndex = INDEX_NONE;
-		if (GetOwnerRole() != ROLE_Authority)
+		if (GetOwnerRole() != ROLE_Authority || !IsValid(InItemDataAsset) || InQuantity <= 0)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("%hs:%d - AddItemWithCallback called on non-authority"), __FUNCTION__,
-			       __LINE__);
 			return false;
 		}
 
-		if (!IsValid(InItemDataAsset))
-		{
-			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid ItemDataAsset"), __FUNCTION__, __LINE__);
-			return false;
-		}
+		FInventoryItemInstance ItemInstance = CreateItemInstance(InItemDataAsset, false);
+		InConfigureCallback(ItemInstance);
 
-		if (InQuantity <= 0)
-		{
-			UE_LOG(LogTemp, Error, TEXT("%hs:%d - Invalid quantity: %d"), __FUNCTION__, __LINE__, InQuantity);
-			return false;
-		}
-
-		// Create new item instance and configure it
-		FInventoryItemInstance itemInstance = CreateItemInstance(InItemDataAsset);
-		InConfigureCallback(itemInstance);
-
-		// Use the instance-based add method
-		return AddItemWithInstance(OutSlotIndex, itemInstance, InQuantity);
+		return AddItemWithInstance(OutSlotIndex, ItemInstance, InQuantity);
 	}
 
 	// Add item to specific slot
@@ -135,6 +187,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool MoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity = -1);
 
+	/** @brief Predicts a locally owned move and submits it for authoritative validation. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Networking", meta = (ToolTip = "Predicts one locally owned move and submits it to the server. Additional predictions wait for authoritative reconciliation."))
+	bool RequestMoveItem(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity = -1);
+
+	/** @brief Replaces one fragment's runtime data on authority and marks its slot for replication. */
+	bool SetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass,
+		const FInstancedStruct& InDynamicData);
+
 	// Get slot by index
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
 	const FInventorySlot& GetSlot(int32 InSlotIndex) const;
@@ -155,7 +215,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
 	int32 FindFirstEmptySlotAnyType() const;
 
-	
+
 	// Count how many of an item we have
 	UFUNCTION(BlueprintCallable, Category = "Inventory", BlueprintPure)
 	int32 CountItem(const UItemDefinitionAsset* InItemDataAsset) const;
@@ -171,9 +231,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void SetSlotType(int32 InSlotIndex, EInventorySlotType InSlotType);
 
-	// Set slot restriction tags
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags);
+	/** @brief Updates restrictions when the current item remains valid. Returns false on non-authority, invalid slot, or incompatible item. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory", meta = (ToolTip = "Updates restrictions only if the current item remains valid. Returns false on non-authority, an invalid slot, or an incompatible item."))
+	bool SetSlotRestrictionTags(int32 InSlotIndex, const FGameplayTagContainer& InRestrictionTags);
 
 	// Lock/unlock a slot
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
@@ -181,9 +241,9 @@ public:
 
 	// Get fragment dynamic data from item in slot
 	template <typename T>
-	T* GetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass)
+	const T* GetSlotItemFragmentDynamicData(int32 InSlotIndex, TSubclassOf<UItemFragment_Base> InFragmentClass) const
 	{
-		FInventorySlot* slot = SlotList.GetSlotMutable(InSlotIndex);
+		const FInventorySlot* slot = SlotList.GetSlot(InSlotIndex);
 		if (slot == nullptr || slot->IsEmpty())
 		{
 			return nullptr;
@@ -191,6 +251,9 @@ public:
 
 		return slot->ItemInstance.GetFragmentDynamicData<T>(InFragmentClass);
 	}
+
+	/** @brief Handles an authoritative Fast Array slot update on this machine. */
+	void HandleReplicatedSlotChange(int32 InSlotIndex, const FInventorySlot& InSlot);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category="Inventory")
 	int32 GetTotalSlotCount() const;
@@ -217,4 +280,29 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnSlotsSwapped OnSlotsSwapped;
+
+protected:
+	UFUNCTION(Server, Reliable)
+	void ServerRequestMoveItem(int32 InPredictionId, int32 InBaseRevision, int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity);
+
+	UFUNCTION(Client, Reliable)
+	void ClientAcknowledgeMoveItem(int32 InPredictionId, int32 InServerRevision);
+
+	UFUNCTION(Client, Reliable)
+	void ClientRejectMoveItem(int32 InPredictionId, int32 InServerRevision);
+
+private:
+#if WITH_DEV_AUTOMATION_TESTS
+	friend class FFragmentedInventoryPredictionRollbackTest;
+	friend class FFragmentedInventoryPredictionLifecycleRollbackTest;
+	friend class FFragmentedInventoryPredictionMergeLifecycleRollbackTest;
+#endif
+
+	int32 NextPredictionId;
+
+	int32 ClientKnownInventoryRevision;
+
+	TOptional<FPendingMovePrediction> PendingMovePrediction;
+
+	TMap<FSoftObjectPath, TSharedPtr<FStreamableHandle>> PendingItemDefinitionLoads;
 };

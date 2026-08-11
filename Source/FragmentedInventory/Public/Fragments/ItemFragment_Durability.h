@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -29,7 +29,7 @@ public:
 };
 
 /**
- * 
+ *
  */
 UCLASS(Blueprintable, BlueprintType)
 class FRAGMENTEDINVENTORY_API UItemFragment_Durability : public UItemFragment_Base
@@ -44,17 +44,17 @@ public:
 	virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const override;
 
 	virtual FString GetDebugString(const FInstancedStruct& InDynamicData) const override;
-	
+
 public:
-	// Maximum durability value
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability", meta = (ClampMin = "1.0", ClampMax = "10000.0"))
+	/** @brief Initial and maximum durability. Valid range is one through 10000. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability", meta = (ClampMin = "1.0", ClampMax = "10000.0", ToolTip = "Initial and maximum durability. Valid range is one through 10000."))
 	float MaxDurability;
 
-	// Whether the item is destroyed when durability reaches 0
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability")
+	/** @brief Destroys the item when durability reaches zero. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability", meta = (ToolTip = "Destroys the item when durability reaches zero."))
 	bool bDestroyOnBroken;
 
-	// Whether this item can be repaired
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability")
+	/** @brief Allows repair systems to increase durability after damage. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Durability", meta = (ToolTip = "Allows repair systems to increase durability after damage."))
 	bool bCanBeRepaired;
 };

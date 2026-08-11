@@ -5,9 +5,11 @@
 
 void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType InDefaultSlotType)
 {
-	Slots.Empty(InSlotCount);
+	const int32 SlotCount = FMath::Max(0, InSlotCount);
+	ResetItemInstances();
+	Slots.Empty(SlotCount);
 
-	for (int32 slotIndex = 0; slotIndex < InSlotCount; ++slotIndex)
+	for (int32 slotIndex = 0; slotIndex < SlotCount; ++slotIndex)
 	{
 		FInventorySlot& newSlot = Slots.AddDefaulted_GetRef();
 		newSlot.SlotIndex = slotIndex;
@@ -16,6 +18,18 @@ void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType I
 		newSlot.bIsLocked = false;
 	}
 	MarkArrayDirty();
+}
+
+void FInventorySlotList::ResetItemInstances()
+{
+	for (FInventorySlot& Slot : Slots)
+	{
+		if (!Slot.IsEmpty())
+		{
+			Slot.ItemInstance.Reset();
+			Slot.CurrentStackSize = 0;
+		}
+	}
 }
 
 const FInventorySlot* FInventorySlotList::GetSlot(int32 InSlotIndex) const
@@ -72,17 +86,36 @@ int32 FInventorySlotList::FindFirstEmptySlot(EInventorySlotType InSlotType) cons
 
 int32 FInventorySlotList::FindSlotForItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity) const
 {
-	if (!IsValid(InItemDataAsset))
+	if (!IsValid(InItemDataAsset) || InQuantity <= 0)
 	{
 		return INDEX_NONE;
 	}
 
-	// First, try to find a slot with the same item that can stack
+	for (int32 SlotIndex = 0; SlotIndex < Slots.Num(); ++SlotIndex)
+	{
+		const FInventorySlot& Slot = Slots[SlotIndex];
+		if (Slot.IsEmpty() && Slot.CanAcceptItem(InItemDataAsset, InQuantity))
+		{
+			return SlotIndex;
+		}
+	}
+
+	return INDEX_NONE;
+}
+
+int32 FInventorySlotList::FindSlotForItemInstance(const FInventoryItemInstance& InItemInstance, int32 InQuantity) const
+{
+	const UItemDefinitionAsset* ItemDataAsset = InItemInstance.GetItemDataAsset();
+	if (!InItemInstance.IsValidData() || !IsValid(ItemDataAsset) || InQuantity <= 0)
+	{
+		return INDEX_NONE;
+	}
+
 	for (int32 slotIndex = 0; slotIndex < Slots.Num(); ++slotIndex)
 	{
 		const FInventorySlot& slot = Slots[slotIndex];
 
-		if (!slot.IsEmpty() && slot.CanAcceptItem(InItemDataAsset, InQuantity))
+		if (!slot.IsEmpty() && slot.CanStackWith(InItemInstance) && slot.GetRemainingStackSpace() >= InQuantity)
 		{
 			return slotIndex;
 		}
@@ -93,7 +126,7 @@ int32 FInventorySlotList::FindSlotForItem(const UItemDefinitionAsset* InItemData
 	{
 		const FInventorySlot& slot = Slots[slotIndex];
 
-		if (slot.IsEmpty() && slot.CanAcceptItem(InItemDataAsset, InQuantity))
+		if (slot.IsEmpty() && slot.CanAcceptItem(ItemDataAsset, InQuantity))
 		{
 			return slotIndex;
 		}
@@ -127,10 +160,10 @@ void FInventorySlotList::PostReplicatedAdd(const TArrayView<int32> AddedIndices,
 	{
 		if (Slots.IsValidIndex(addedIndex))
 		{
-			// Slots were added - notify component
 			if (IsValid(OwnerComponent))
 			{
-				// You can add custom logic here if needed
+				const FInventorySlot& Slot = Slots[addedIndex];
+				OwnerComponent->HandleReplicatedSlotChange(Slot.SlotIndex, Slot);
 			}
 		}
 	}
@@ -147,8 +180,7 @@ void FInventorySlotList::PostReplicatedChange(const TArrayView<int32> ChangedInd
 
 			if (IsValid(OwnerComponent))
 			{
-				// Broadcast that this slot changed
-				OwnerComponent->OnSlotChanged.Broadcast(slot.SlotIndex, slot);
+				OwnerComponent->HandleReplicatedSlotChange(slot.SlotIndex, slot);
 			}
 		}
 	}

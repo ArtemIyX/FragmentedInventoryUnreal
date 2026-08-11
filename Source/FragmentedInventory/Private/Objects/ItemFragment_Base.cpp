@@ -4,6 +4,8 @@
 #include "Objects/ItemFragment_Base.h"
 
 #include "Data/InventoryItemInstance.h"
+#include "FragmentedInventory.h"
+#include "Logging/StructuredLog.h"
 
 UItemFragment_Base::UItemFragment_Base(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
@@ -20,8 +22,7 @@ void UItemFragment_Base::InitializeDynamicData(FInstancedStruct& OutDynamicData)
 	const UScriptStruct* structType = GetDynamicDataStructType();
 	if (!IsValid(structType))
 	{
-		UE_LOG(LogTemp, Error, TEXT("%hs:%d - GetDynamicDataStructType returned null for fragment %s"), __FUNCTION__,
-			   __LINE__, *GetNameSafe(this));
+		UE_LOGFMT(LogFragmentedInventory, Error, "GetDynamicDataStructType returned null for fragment {Fragment}", GetNameSafe(this));
 		return;
 	}
 
@@ -64,4 +65,9 @@ void UItemFragment_Base::RemoveTags(FGameplayTagContainer& ItemTags) const
 {
 	ItemTags.RemoveTags(DefaultItemTags);
 	ItemTags.RemoveTags(AdditionalItemTags);
+}
+
+void UItemFragment_Base::AppendItemTags(FGameplayTagContainer& OutItemTags) const
+{
+	GrantTags(OutItemTags);
 }

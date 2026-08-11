@@ -3,7 +3,9 @@
 
 #include "Data/ItemDefinitionAsset.h"
 
+#include "FragmentedInventory.h"
 #include "Fragments/ItemFragment_Stackable.h"
+#include "Logging/StructuredLog.h"
 #include "Misc/DataValidation.h"
 #include "Objects/ItemFragment_Base.h"
 
@@ -31,19 +33,31 @@ EDataValidationResult UItemDefinitionAsset::IsDataValid(class FDataValidationCon
 	}
 
 	// Check for duplicate fragment types
-	TSet<UClass*> FragmentClasses;
+	TArray<const UClass*> FragmentClasses;
 	for (const UItemFragment_Base* fragment : Fragments)
 	{
 		if (IsValid(fragment))
 		{
-			if (FragmentClasses.Contains(fragment->GetClass()))
+			const UClass* FragmentClass = fragment->GetClass();
+			const bool bHasOverlappingFragmentClass = FragmentClasses.ContainsByPredicate(
+				[FragmentClass](const UClass* ExistingFragmentClass)
+				{
+					return FragmentClass->IsChildOf(ExistingFragmentClass) || ExistingFragmentClass->IsChildOf(FragmentClass);
+				});
+			if (bHasOverlappingFragmentClass)
 			{
 				Context.AddError(FText::FromString(
-					FString::Printf(TEXT("Duplicate fragment type: %s"), *fragment->GetClass()->GetName())));
+					FString::Printf(TEXT("Overlapping fragment class hierarchy: %s"), *FragmentClass->GetName())));
 				Result = EDataValidationResult::Invalid;
 			}
-			FragmentClasses.Add(fragment->GetClass());
+			FragmentClasses.Add(FragmentClass);
 		}
+	}
+
+	if (GetMaxStackSize() <= 0)
+	{
+		Context.AddError(FText::FromString(TEXT("Max stack size must be greater than zero")));
+		Result = EDataValidationResult::Invalid;
 	}
 
 	// Validate ItemTypeID is set
@@ -84,14 +98,13 @@ UItemFragment_Base* UItemDefinitionAsset::GetFragmentByClass(TSubclassOf<UItemFr
 {
 	if (!InFragmentClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("%hs:%d - Invalid fragment class passed to GetFragmentByClass"), __FUNCTION__,
-		       __LINE__);
+		UE_LOGFMT(LogFragmentedInventory, Warning, "Invalid fragment class passed to GetFragmentByClass");
 		return nullptr;
 	}
 
 	for (UItemFragment_Base* fragment : Fragments)
 	{
-		if (IsValid(fragment) && fragment->GetClass() == InFragmentClass)
+		if (IsValid(fragment) && fragment->IsA(InFragmentClass))
 		{
 			return fragment;
 		}
@@ -114,11 +127,30 @@ int32 UItemDefinitionAsset::GetFragmentIndex(TSubclassOf<UItemFragment_Base> InF
 
 	for (int32 i = 0; i < Fragments.Num(); ++i)
 	{
-		if (IsValid(Fragments[i]) && Fragments[i]->GetClass() == InFragmentClass)
+		if (IsValid(Fragments[i]) && Fragments[i]->IsA(InFragmentClass))
 		{
 			return i;
 		}
 	}
 
 	return INDEX_NONE;
+}
+
+FGameplayTagContainer UItemDefinitionAsset::GetItemTags() const
+{
+	FGameplayTagContainer Result = ItemTags;
+	for (const UItemFragment_Base* Fragment : Fragments)
+	{
+		if (IsValid(Fragment))
+		{
+			Fragment->AppendItemTags(Result);
+		}
+	}
+
+	return Result;
+}
+
+FPrimaryAssetId UItemDefinitionAsset::GetPrimaryAssetId() const
+{
+	return FPrimaryAssetId(PrimaryAssetType, AssetId.IsNone() ? GetFName() : AssetId);
 }

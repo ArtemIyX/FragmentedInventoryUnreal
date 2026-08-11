@@ -24,6 +24,9 @@ public:
 	// Initialize slots with a specific count and type
 	void InitializeSlots(int32 InSlotCount, EInventorySlotType InDefaultSlotType = EInventorySlotType::General);
 
+	/** @brief Invokes destruction callbacks for every valid item before bulk disposal. */
+	void ResetItemInstances();
+
 	// Get slot by index (const)
 	const FInventorySlot* GetSlot(int32 InSlotIndex) const;
 
@@ -37,8 +40,11 @@ public:
 	int32 FindFirstEmptySlot() const;
 	int32 FindFirstEmptySlot(EInventorySlotType InSlotTyp) const;
 
-	// Find first slot that can accept the item (empty or stackable)
+	/** @brief Finds an empty slot that accepts an item definition and quantity. */
 	int32 FindSlotForItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity = 1) const;
+
+	/** @brief Finds a compatible occupied stack or an empty slot for a specific item instance and quantity. */
+	int32 FindSlotForItemInstance(const FInventoryItemInstance& InItemInstance, int32 InQuantity = 1) const;
 
 public:
 	// Array of slots - this is what actually replicates
@@ -46,7 +52,7 @@ public:
 	TArray<FInventorySlot> Slots;
 
 	// Owner component reference
-	UPROPERTY(NotReplicated)
+	UPROPERTY(Transient, NotReplicated)
 	TObjectPtr<UFragmentedInventoryComponent> OwnerComponent;
 
 	// Fast array callbacks

@@ -10,7 +10,7 @@ The Fragmented Inventory System provides a modular approach to creating inventor
 
 - **Fragment-Based Architecture**: Define items through composable, reusable fragments
 - **Network Replicated**: Built on Fast Array Serialization for optimal network performance
-- **Slot-Based Inventory**: Fixed-size inventory with configurable slot types and restrictions
+- **Slot-Based Inventory**: Fixed-size inventory with configurable slot types and tag restrictions
 - **Dynamic Item Data**: Each item instance can maintain unique runtime state
 - **Stackable Items**: Native support for item stacking with configurable limits
 - **Flexible Slot Management**: Support for different slot types (General, Equipment, Hotbar, Ammo, Quest)
@@ -32,7 +32,7 @@ TObjectPtr<UFragmentedInventoryComponent> InventoryComponent;
 ### 2. Create an Item Definition
 
 Create a new `UItemDefinitionAsset` Data Asset:
-- Right-click in Content Browser → Miscellaneous → Data Asset
+- Right-click in Content Browser â†’ Miscellaneous â†’ Data Asset
 - Select `ItemDefinitionAsset` as the class
 - Configure the item's display properties (name, description, icon)
 - Add fragments to define item capabilities
@@ -72,13 +72,13 @@ const FInventorySlot& slot = InventoryComponent->GetSlot(0);
 
 ```
 ItemDefinitionAsset (Data Asset)
-    ↓ defines
+    â†“ defines
 InventoryItemInstance (Runtime Data)
-    ↓ stored in
+    â†“ stored in
 InventorySlot (Container)
-    ↓ managed by
+    â†“ managed by
 InventorySlotList (Fast Array)
-    ↓ owned by
+    â†“ owned by
 FragmentedInventoryComponent (Actor Component)
 ```
 
@@ -134,7 +134,7 @@ USTRUCT(BlueprintType)
 struct FMyFragmentDynamicData
 {
     GENERATED_BODY()
-    
+
     UPROPERTY()
     int32 Durability = 100;
 };
@@ -143,19 +143,19 @@ UCLASS()
 class UItemFragment_MyFragment : public UItemFragment_Base
 {
     GENERATED_BODY()
-    
+
 public:
     virtual const UScriptStruct* GetDynamicDataStructType() const override
     {
         return FMyFragmentDynamicData::StaticStruct();
     }
-    
+
     virtual void InitializeDynamicData(FInstancedStruct& OutDynamicData) const override
     {
         Super::InitializeDynamicData(OutDynamicData);
         // Initialize with default values
     }
-    
+
     UPROPERTY(EditDefaultsOnly, Category = "MyFragment")
     int32 MaxDurability = 100;
 };
@@ -219,7 +219,7 @@ Container for a single inventory slot with item instance and metadata.
 **Key Properties:**
 - `SlotIndex`: Fixed index in inventory
 - `SlotType`: Type of slot (General, Equipment, Hotbar, Ammo, Quest)
-- `SlotRestrictionTags`: Tags that restrict what items can be placed here
+- `SlotRestrictionTags`: Any matching static item or fragment tag is required for placement
 - `ItemInstance`: The item stored in this slot
 - `CurrentStackSize`: Current number of items stacked
 - `bIsLocked`: Whether slot can be modified
@@ -246,7 +246,8 @@ Fast Array container for all inventory slots. Handles replication efficiently.
 - `GetSlot(SlotIndex)`: Get const slot reference
 - `GetSlotMutable(SlotIndex)`: Get mutable slot reference
 - `FindFirstEmptySlot(SlotType)`: Find first empty slot of type
-- `FindSlotForItem(ItemDataAsset, Quantity)`: Find best slot for item (stackable or empty)
+- `FindSlotForItem(ItemDataAsset, Quantity)`: Find an empty compatible slot
+- `FindSlotForItemInstance(ItemInstance, Quantity)`: Find a compatible stack or empty slot for a specific instance
 
 **Replication Callbacks:**
 - `PreReplicatedRemove()`: Called before slots are removed
@@ -271,12 +272,12 @@ Main inventory component that manages all inventory operations.
 // Add item (auto-finds slot, handles stacking)
 bool AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* ItemDataAsset, int32 Quantity = 1);
 
-// Add with pre-configured instance (won't stack, creates unique items)
+// Add clones of a pre-configured instance (won't stack, each stored item receives lifecycle callbacks)
 bool AddItemWithInstance(int32& OutSlotIndex, const FInventoryItemInstance& ItemInstance, int32 Quantity = 1);
 
-// Add with callback to configure dynamic data
+// Add with callback to configure dynamic data before inventory-owned lifecycle callbacks run
 template<typename CallbackType>
-bool AddItemWithCallback(int32& OutSlotIndex, const UItemDefinitionAsset* ItemDataAsset, 
+bool AddItemWithCallback(int32& OutSlotIndex, const UItemDefinitionAsset* ItemDataAsset,
                         int32 Quantity, CallbackType&& ConfigureCallback);
 
 // Add to specific slot
@@ -330,7 +331,7 @@ float GetInventoryUsagePercent() const;
 ```cpp
 // Configure slot properties (authority only)
 void SetSlotType(int32 SlotIndex, EInventorySlotType SlotType);
-void SetSlotRestrictionTags(int32 SlotIndex, const FGameplayTagContainer& RestrictionTags);
+bool SetSlotRestrictionTags(int32 SlotIndex, const FGameplayTagContainer& RestrictionTags);
 void SetSlotLocked(int32 SlotIndex, bool bLocked);
 ```
 
@@ -344,7 +345,7 @@ T* GetSlotItemFragmentDynamicData(int32 SlotIndex, TSubclassOf<UItemFragment_Bas
 **Delegates:**
 - `OnSlotChanged`: Broadcast when any slot changes
 - `OnItemAdded`: Broadcast when items are added
-- `OnItemRemoved`: Broadcast when items are removed  
+- `OnItemRemoved`: Broadcast when items are removed
 - `OnSlotsSwapped`: Broadcast when slots are swapped
 
 ---
@@ -376,7 +377,7 @@ int32 potionCount = InventoryComponent->CountItem(HealthPotionAsset);
 ```cpp
 // Add item with custom durability
 int32 slotIndex;
-InventoryComponent->AddItemWithCallback(slotIndex, SwordAsset, 1, 
+InventoryComponent->AddItemWithCallback(slotIndex, SwordAsset, 1,
     [](FInventoryItemInstance& instance)
     {
         // Configure the item instance before it's added
@@ -407,7 +408,7 @@ if (durabilityData)
 void AMyPlayerController::BeginPlay()
 {
     Super::BeginPlay();
-    
+
     if (UFragmentedInventoryComponent* inventory = GetPawn()->FindComponentByClass<UFragmentedInventoryComponent>())
     {
         // Bind to inventory changes
@@ -433,7 +434,10 @@ void AMyPlayerController::OnInventorySlotChanged(int32 slotIndex, const FInvento
 // Create a weapons-only slot
 FGameplayTagContainer weaponTags;
 weaponTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Item.Type.Weapon")));
-InventoryComponent->SetSlotRestrictionTags(0, weaponTags);
+if (!InventoryComponent->SetSlotRestrictionTags(0, weaponTags))
+{
+    // The slot's current item does not satisfy the new restrictions.
+}
 InventoryComponent->SetSlotType(0, EInventorySlotType::Equipment);
 
 // Lock a slot (prevent modifications)
@@ -457,29 +461,36 @@ Query operations can be performed on any machine:
 - Counting items
 - Checking if items exist
 
+### Client Prediction
+
+`RequestMoveItem` is the only client-predicted operation. It accepts calls from
+the locally owned component only, permits one pending move, and sends a reliable
+component Server RPC with the current inventory revision. The server validates
+the revision and move. A rejection restores the local pre-move slots and forces
+authoritative Fast Array updates for both slots. The next prediction waits until
+both authoritative slot updates arrive.
+
+`AddItem`, remove, clear, swap, direct `MoveItem`, slot configuration, and
+dynamic fragment-data changes are authority-only. Use `MoveItem` directly in
+standalone or on the listen-server host.
+
+`OnSlotChanged` is the replicated state event and fires for local and Fast Array
+updates. `OnItemAdded`, `OnItemRemoved`, and `OnSlotsSwapped` are local
+transaction events. They do not fire when a remote Fast Array update arrives.
+
 ### Replication Flow
 
-1. Client performs UI action (drag item, click button)
-2. Client calls RPC to server
-3. Server validates and performs operation
-4. Fast Array Serialization sends delta to clients
-5. `PostReplicatedChange` callback fires on clients
-6. Delegates broadcast to update UI
+1. Autonomous client calls `RequestMoveItem` and predicts one move.
+2. The component sends prediction ID and inventory revision to the server.
+3. The server accepts and mutates, or rejects and dirties both authoritative slots.
+4. Fast Array Serialization sends slot deltas to clients.
+5. `PostReplicatedAdd` or `PostReplicatedChange` fires `OnSlotChanged`.
+6. A pending prediction resolves only after both affected slots refresh.
 
-### Example RPC
+### Predicted Move
 
 ```cpp
-// In your player controller or character
-UFUNCTION(Server, Reliable)
-void ServerMoveInventoryItem(int32 fromSlot, int32 toSlot, int32 quantity);
-
-void AMyCharacter::ServerMoveInventoryItem_Implementation(int32 fromSlot, int32 toSlot, int32 quantity)
-{
-    if (UFragmentedInventoryComponent* inventory = FindComponentByClass<UFragmentedInventoryComponent>())
-    {
-        inventory->MoveItem(fromSlot, toSlot, quantity);
-    }
-}
+InventoryComponent->RequestMoveItem(FromSlot, ToSlot, Quantity);
 ```
 
 ---
@@ -499,8 +510,8 @@ void AMyCharacter::ServerMoveInventoryItem_Implementation(int32 fromSlot, int32 
 
 ### 2. Item Instances
 - Use `AddItem()` for generic stackable items
-- Use `AddItemWithCallback()` when you need to configure dynamic data
-- Use `AddItemWithInstance()` when you have a pre-configured instance
+- Use `AddItemWithCallback()` when you need to configure dynamic data before the inventory creates an item instance
+- Use `AddItemWithInstance()` when you need inventory-owned clones of a pre-configured instance
 
 ### 3. Performance
 - Cache frequently accessed item data assets

@@ -26,19 +26,12 @@ int32 FInventorySlot::GetMaxStackSize() const
 
 int32 FInventorySlot::GetRemainingStackSpace() const
 {
-	return GetMaxStackSize() - CurrentStackSize;
+	return FMath::Max(0, GetMaxStackSize() - CurrentStackSize);
 }
 
 bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, int32 InQuantity) const
 {
-	// Check if slot is locked
-	if (bIsLocked)
-	{
-		return false;
-	}
-
-	// Check if valid item data asset
-	if (!IsValid(InItemDataAsset))
+	if (!CanPlaceItem(InItemDataAsset))
 	{
 		return false;
 	}
@@ -49,36 +42,39 @@ bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, 
 		return false;
 	}
 
-	// If slot is empty, check only restriction tags
+	if (!IsEmpty())
+	{
+		return false;
+	}
+
+	const int32 MaxStackSize = InItemDataAsset->GetMaxStackSize();
+	return MaxStackSize > 0 && InQuantity <= MaxStackSize;
+}
+
+bool FInventorySlot::CanAcceptItemInstance(const FInventoryItemInstance& InItemInstance, int32 InQuantity) const
+{
+	const UItemDefinitionAsset* ItemDataAsset = InItemInstance.GetItemDataAsset();
+	if (!InItemInstance.IsValidData() || !IsValid(ItemDataAsset) || InQuantity <= 0)
+	{
+		return false;
+	}
+
 	if (IsEmpty())
 	{
-		// If no restriction tags, accept any item
-		if (SlotRestrictionTags.IsEmpty())
-		{
-			return true;
-		}
-
-		// Check if item has any of the required tags
-		// TODO: This assumes items have tags - you may need to add ItemTags to ItemDefinitionAsset
-		// For now, we'll accept if no restrictions
-		return true;
+		return CanAcceptItem(ItemDataAsset, InQuantity);
 	}
 
-	// If slot has an item, check if we can stack
-	if (!ItemInstance.IsValidData())
+	return CanStackWith(InItemInstance) && GetRemainingStackSpace() >= InQuantity;
+}
+
+bool FInventorySlot::CanPlaceItem(const UItemDefinitionAsset* InItemDataAsset) const
+{
+	if (bIsLocked || !IsValid(InItemDataAsset))
 	{
 		return false;
 	}
 
-	// Check if same item type
-	if (ItemInstance.GetItemDataAsset() != InItemDataAsset)
-	{
-		return false;
-	}
-
-	// Check if we have space for the quantity
-	const int32 remainingSpace = GetRemainingStackSpace();
-	return remainingSpace >= InQuantity;
+	return SlotRestrictionTags.IsEmpty() || InItemDataAsset->GetItemTags().HasAny(SlotRestrictionTags);
 }
 
 bool FInventorySlot::CanStackWith(const FInventoryItemInstance& InOtherItem) const
