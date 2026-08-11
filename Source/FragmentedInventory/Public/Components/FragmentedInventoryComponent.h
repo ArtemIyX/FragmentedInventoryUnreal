@@ -46,7 +46,8 @@ private:
 	void ForceAuthoritativeSlotRefresh(int32 InSlotIndex);
 
 	/** @brief Clears a slot without broadcasting item removal. */
-	bool ClearSlotInternal(int32 InSlotIndex, const UItemDefinitionAsset*& OutItemDataAsset, int32& OutQuantity);
+	bool ClearSlotInternal(int32 InSlotIndex, const UItemDefinitionAsset*& OutItemDataAsset, int32& OutQuantity,
+		bool bInInvokeDestroyedCallbacks = true);
 
 	/** @brief Finds an empty slot that accepts an item definition. */
 	int32 FindFirstEmptySlotForItem(const UItemDefinitionAsset* InItemDataAsset) const;
@@ -294,6 +295,7 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FFragmentedInventoryPredictionRollbackTest;
 	friend class FFragmentedInventoryPredictionLifecycleRollbackTest;
+	friend class FFragmentedInventoryPredictionMergeLifecycleRollbackTest;
 #endif
 
 	int32 NextPredictionId;

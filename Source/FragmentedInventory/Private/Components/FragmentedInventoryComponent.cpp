@@ -714,7 +714,9 @@ bool UFragmentedInventoryComponent::MoveItemInternal(int32 InFromSlotIndex, int3
 		{
 			const UItemDefinitionAsset* RemovedItemDataAsset = nullptr;
 			int32 ClearedQuantity = 0;
-			if (!ensure(ClearSlotInternal(InFromSlotIndex, RemovedItemDataAsset, ClearedQuantity)))
+			const bool bInvokeDestroyedCallbacks = GetOwnerRole() == ROLE_Authority;
+			if (!ensure(ClearSlotInternal(InFromSlotIndex, RemovedItemDataAsset, ClearedQuantity,
+				bInvokeDestroyedCallbacks)))
 			{
 				return false;
 			}
@@ -1103,7 +1105,8 @@ void UFragmentedInventoryComponent::ForceAuthoritativeSlotRefresh(int32 InSlotIn
 	}
 }
 
-bool UFragmentedInventoryComponent::ClearSlotInternal(int32 InSlotIndex, const UItemDefinitionAsset*& OutItemDataAsset, int32& OutQuantity)
+bool UFragmentedInventoryComponent::ClearSlotInternal(int32 InSlotIndex, const UItemDefinitionAsset*& OutItemDataAsset, int32& OutQuantity,
+	bool bInInvokeDestroyedCallbacks)
 {
 	OutItemDataAsset = nullptr;
 	OutQuantity = 0;
@@ -1115,7 +1118,14 @@ bool UFragmentedInventoryComponent::ClearSlotInternal(int32 InSlotIndex, const U
 
 	OutItemDataAsset = Slot->ItemInstance.GetItemDataAsset();
 	OutQuantity = Slot->CurrentStackSize;
-	Slot->ItemInstance.Reset();
+	if (bInInvokeDestroyedCallbacks)
+	{
+		Slot->ItemInstance.Reset();
+	}
+	else
+	{
+		Slot->ItemInstance = FInventoryItemInstance();
+	}
 	Slot->CurrentStackSize = 0;
 	MarkSlotDirty(*Slot);
 	return true;

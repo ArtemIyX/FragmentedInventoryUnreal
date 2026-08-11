@@ -258,6 +258,52 @@ bool FFragmentedInventoryPredictionLifecycleRollbackTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryPredictionMergeLifecycleRollbackTest,
+	"FragmentedInventory.Inventory.PredictionMergeLifecycleRollback",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryPredictionMergeLifecycleRollbackTest::RunTest(const FString& Parameters)
+{
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>();
+	Inventory->SlotList.InitializeSlots(2);
+	TestFalse(TEXT("Prediction merge fixture is non-authoritative"), Inventory->GetOwnerRole() == ROLE_Authority);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleTest* LifecycleFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	UItemFragment_Stackable* StackableFragment = NewObject<UItemFragment_Stackable>(ItemDefinition);
+	StackableFragment->MaxStackSize = 2;
+	ItemDefinition->Fragments.Add(LifecycleFragment);
+	ItemDefinition->Fragments.Add(StackableFragment);
+
+	FInventoryItemInstance SourceItemInstance;
+	SourceItemInstance.InitializeFromDataAsset(ItemDefinition);
+	Inventory->SlotList.Slots[0].ItemInstance = MoveTemp(SourceItemInstance);
+	Inventory->SlotList.Slots[0].CurrentStackSize = 1;
+	TestTrue(TEXT("Target stack initializes without client lifecycle callbacks"),
+		Inventory->SlotList.Slots[1].ItemInstance.InitializeFromExistingInstance(Inventory->SlotList.Slots[0].ItemInstance, false));
+	Inventory->SlotList.Slots[1].CurrentStackSize = 1;
+
+	UFragmentedInventoryComponent::FPendingMovePrediction Prediction;
+	Prediction.PredictionId = 1;
+	Prediction.FromSlotIndex = 0;
+	Prediction.ToSlotIndex = 1;
+	Prediction.FromSlotBefore = Inventory->SlotList.Slots[0];
+	Prediction.ToSlotBefore = Inventory->SlotList.Slots[1];
+	Inventory->PendingMovePrediction = Prediction;
+
+	TArray<int32> ChangedSlotIndices;
+	bool bSlotsSwapped = false;
+	TestTrue(TEXT("Non-authoritative full merge prediction succeeds locally"), Inventory->MoveItemInternal(0, 1, 1, &ChangedSlotIndices, &bSlotsSwapped));
+	TestTrue(TEXT("Predicted full merge clears its source slot"), Inventory->SlotList.Slots[0].IsEmpty());
+	TestEqual(TEXT("Predicted full merge does not invoke lifecycle destruction callbacks"), LifecycleFragment->GetDestroyedCallbackCount(), 0);
+	Inventory->RollbackPendingMove();
+	TestEqual(TEXT("Rollback restores source quantity after a full merge"), Inventory->SlotList.Slots[0].CurrentStackSize, 1);
+	TestEqual(TEXT("Rollback restores target quantity after a full merge"), Inventory->SlotList.Slots[1].CurrentStackSize, 1);
+	TestEqual(TEXT("Rollback does not require predicted full-merge lifecycle destruction callbacks"), LifecycleFragment->GetDestroyedCallbackCount(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FFragmentedInventoryFullMoveLifecycleTest,
 	"FragmentedInventory.Inventory.FullMoveLifecycle",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
