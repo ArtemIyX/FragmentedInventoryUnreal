@@ -6,6 +6,7 @@
 void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType InDefaultSlotType)
 {
 	const int32 SlotCount = FMath::Max(0, InSlotCount);
+	ResetItemInstances();
 	Slots.Empty(SlotCount);
 
 	for (int32 slotIndex = 0; slotIndex < SlotCount; ++slotIndex)
@@ -17,6 +18,18 @@ void FInventorySlotList::InitializeSlots(int32 InSlotCount, EInventorySlotType I
 		newSlot.bIsLocked = false;
 	}
 	MarkArrayDirty();
+}
+
+void FInventorySlotList::ResetItemInstances()
+{
+	for (FInventorySlot& Slot : Slots)
+	{
+		if (!Slot.IsEmpty())
+		{
+			Slot.ItemInstance.Reset();
+			Slot.CurrentStackSize = 0;
+		}
+	}
 }
 
 const FInventorySlot* FInventorySlotList::GetSlot(int32 InSlotIndex) const

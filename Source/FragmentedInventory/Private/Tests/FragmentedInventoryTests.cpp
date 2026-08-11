@@ -327,4 +327,85 @@ bool FFragmentedInventoryCandidateLifecycleTest::RunTest(const FString& Paramete
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryCloneLifecycleTest,
+	"FragmentedInventory.Inventory.CloneLifecycle",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryCloneLifecycleTest::RunTest(const FString& Parameters)
+{
+	AActor* Owner = NewObject<AActor>(GetTransientPackage());
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>(Owner);
+	Owner->AddOwnedComponent(Inventory);
+	Inventory->InitializeInventory(2);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleTest* LifecycleFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	ItemDefinition->Fragments.Add(LifecycleFragment);
+
+	int32 SlotIndex = INDEX_NONE;
+	TestTrue(TEXT("Configured instances are added"), Inventory->AddItemWithCallback(
+		SlotIndex,
+		ItemDefinition,
+		2,
+		[](FInventoryItemInstance&) {}));
+	TestEqual(TEXT("Each stored clone receives a creation callback"), LifecycleFragment->GetCreatedCallbackCount(), 2);
+
+	Inventory->ClearSlot(0);
+	Inventory->ClearSlot(1);
+	TestEqual(TEXT("Each stored clone receives a destruction callback"), LifecycleFragment->GetDestroyedCallbackCount(), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventorySplitLifecycleTest,
+	"FragmentedInventory.Inventory.SplitLifecycle",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventorySplitLifecycleTest::RunTest(const FString& Parameters)
+{
+	AActor* Owner = NewObject<AActor>(GetTransientPackage());
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>(Owner);
+	Owner->AddOwnedComponent(Inventory);
+	Inventory->InitializeInventory(2);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleTest* LifecycleFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	UItemFragment_Stackable* StackableFragment = NewObject<UItemFragment_Stackable>(ItemDefinition);
+	StackableFragment->MaxStackSize = 2;
+	ItemDefinition->Fragments.Add(LifecycleFragment);
+	ItemDefinition->Fragments.Add(StackableFragment);
+
+	TestTrue(TEXT("Source stack is added"), Inventory->AddItemToSlot(0, ItemDefinition, 2));
+	TestTrue(TEXT("Partial move creates a new logical instance"), Inventory->MoveItem(0, 1, 1));
+	TestEqual(TEXT("Partial move invokes creation for the split instance"), LifecycleFragment->GetCreatedCallbackCount(), 2);
+
+	Inventory->ClearSlot(0);
+	Inventory->ClearSlot(1);
+	TestEqual(TEXT("Split instances are both destroyed"), LifecycleFragment->GetDestroyedCallbackCount(), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryReinitializeLifecycleTest,
+	"FragmentedInventory.Inventory.ReinitializeLifecycle",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryReinitializeLifecycleTest::RunTest(const FString& Parameters)
+{
+	AActor* Owner = NewObject<AActor>(GetTransientPackage());
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>(Owner);
+	Owner->AddOwnedComponent(Inventory);
+	Inventory->InitializeInventory(1);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleTest* LifecycleFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	ItemDefinition->Fragments.Add(LifecycleFragment);
+
+	TestTrue(TEXT("Item is added before reinitialization"), Inventory->AddItemToSlot(0, ItemDefinition));
+	Inventory->InitializeInventory(1);
+	TestEqual(TEXT("Reinitialization destroys the replaced item instance"), LifecycleFragment->GetDestroyedCallbackCount(), 1);
+	return true;
+}
+
 #endif

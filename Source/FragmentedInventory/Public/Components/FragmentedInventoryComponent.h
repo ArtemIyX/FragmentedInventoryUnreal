@@ -33,6 +33,9 @@ private:
 	/** @brief Broadcasts a changed slot after its mutation is complete. */
 	void BroadcastSlotChanged(int32 InSlotIndex);
 
+	/** @brief Broadcasts committed slot changes in mutation order. */
+	void BroadcastSlotChanges(const TArray<int32>& InSlotIndices);
+
 	/** @brief Marks an authoritative slot change for Fast Array and push-model replication. */
 	void MarkSlotDirty(FInventorySlot& InSlot);
 
@@ -49,10 +52,11 @@ private:
 	int32 FindFirstEmptySlotForItem(const UItemDefinitionAsset* InItemDataAsset) const;
 
 	/** @brief Executes a move without changing the inventory revision. */
-	bool MoveItemInternal(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity);
+	bool MoveItemInternal(int32 InFromSlotIndex, int32 InToSlotIndex, int32 InQuantity,
+		TArray<int32>* OutChangedSlotIndices = nullptr, bool* bOutSlotsSwapped = nullptr);
 
 	/** @brief Executes a swap without changing the inventory revision. */
-	bool SwapSlotsInternal(int32 InSlotIndexA, int32 InSlotIndexB);
+	bool SwapSlotsInternal(int32 InSlotIndexA, int32 InSlotIndexB, TArray<int32>* OutChangedSlotIndices = nullptr);
 
 	/** @brief Starts a non-blocking load for a replicated item definition. */
 	void EnsureItemDefinitionLoaded(const FInventoryItemInstance& InItemInstance);
@@ -69,7 +73,8 @@ private:
 	FInventorySlot* GetSlotMutable(int32 InSlotIndex);
 
 	// Create a new item instance
-	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset) const;
+	FInventoryItemInstance CreateItemInstance(const UItemDefinitionAsset* InItemDataAsset,
+		bool bInInvokeCreatedCallbacks = true) const;
 
 	struct FPendingMovePrediction
 	{
@@ -147,7 +152,7 @@ public:
 			return false;
 		}
 
-		FInventoryItemInstance ItemInstance = CreateItemInstance(InItemDataAsset);
+		FInventoryItemInstance ItemInstance = CreateItemInstance(InItemDataAsset, false);
 		InConfigureCallback(ItemInstance);
 
 		return AddItemWithInstance(OutSlotIndex, ItemInstance, InQuantity);

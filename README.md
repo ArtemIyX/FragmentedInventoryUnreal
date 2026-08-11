@@ -271,10 +271,10 @@ Main inventory component that manages all inventory operations.
 // Add item (auto-finds slot, handles stacking)
 bool AddItem(int32& OutSlotIndex, const UItemDefinitionAsset* ItemDataAsset, int32 Quantity = 1);
 
-// Add with pre-configured instance (won't stack, creates unique items)
+// Add clones of a pre-configured instance (won't stack, each stored item receives lifecycle callbacks)
 bool AddItemWithInstance(int32& OutSlotIndex, const FInventoryItemInstance& ItemInstance, int32 Quantity = 1);
 
-// Add with callback to configure dynamic data
+// Add with callback to configure dynamic data before inventory-owned lifecycle callbacks run
 template<typename CallbackType>
 bool AddItemWithCallback(int32& OutSlotIndex, const UItemDefinitionAsset* ItemDataAsset,
                         int32 Quantity, CallbackType&& ConfigureCallback);
@@ -509,8 +509,8 @@ InventoryComponent->RequestMoveItem(FromSlot, ToSlot, Quantity);
 
 ### 2. Item Instances
 - Use `AddItem()` for generic stackable items
-- Use `AddItemWithCallback()` when you need to configure dynamic data
-- Use `AddItemWithInstance()` when you have a pre-configured instance
+- Use `AddItemWithCallback()` when you need to configure dynamic data before the inventory creates an item instance
+- Use `AddItemWithInstance()` when you need inventory-owned clones of a pre-configured instance
 
 ### 3. Performance
 - Cache frequently accessed item data assets

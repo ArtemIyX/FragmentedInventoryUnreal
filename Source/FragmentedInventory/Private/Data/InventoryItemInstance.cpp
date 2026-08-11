@@ -13,7 +13,7 @@ FInventoryItemInstance::FInventoryItemInstance()
 {
 }
 
-void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset* InItemDataAsset)
+void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset* InItemDataAsset, bool bInInvokeCreatedCallbacks)
 {
 	if (!IsValid(InItemDataAsset))
 	{
@@ -49,9 +49,55 @@ void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset*
 		fragment->InitializeDynamicData(dynamicData);
 		DynamicFragmentData.Add(MoveTemp(dynamicData));
 
-		// Call fragment's OnItemCreated hook
-		fragment->OnItemCreated(this, DynamicFragmentData.Last());
+		if (bInInvokeCreatedCallbacks)
+		{
+			fragment->OnItemCreated(this, DynamicFragmentData.Last());
+		}
 	}
+}
+
+bool FInventoryItemInstance::InitializeFromExistingInstance(const FInventoryItemInstance& InSourceInstance)
+{
+	if (this == &InSourceInstance)
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "Cannot clone an inventory item instance into itself");
+		return false;
+	}
+
+	const UItemDefinitionAsset* SourceItemDataAsset = InSourceInstance.GetItemDataAsset();
+	if (!InSourceInstance.IsValidData() || !IsValid(SourceItemDataAsset))
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "Cannot clone an invalid inventory item instance");
+		return false;
+	}
+
+	Reset();
+	ItemInstanceID = FGuid::NewGuid();
+	ItemDataAsset = InSourceInstance.ItemDataAsset;
+	CachedItemDataAsset = SourceItemDataAsset;
+	ItemTags = InSourceInstance.ItemTags;
+	DynamicFragmentData = InSourceInstance.DynamicFragmentData;
+
+	const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = SourceItemDataAsset->GetFragments();
+	for (int32 FragmentIndex = 0; FragmentIndex < Fragments.Num(); ++FragmentIndex)
+	{
+		const UItemFragment_Base* Fragment = Fragments[FragmentIndex];
+		if (!IsValid(Fragment))
+		{
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", SourceItemDataAsset->GetName());
+			continue;
+		}
+
+		if (!DynamicFragmentData.IsValidIndex(FragmentIndex))
+		{
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Missing dynamic data for fragment {Fragment} while cloning item {ItemDefinition}", Fragment->GetName(), SourceItemDataAsset->GetName());
+			continue;
+		}
+
+		Fragment->OnItemCreated(this, DynamicFragmentData[FragmentIndex]);
+	}
+
+	return true;
 }
 
 int32 FInventoryItemInstance::GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const

@@ -22,7 +22,10 @@ public:
 
 public:
 	// Initialize item from data asset
-	void InitializeFromDataAsset(const UItemDefinitionAsset* InItemDataAsset);
+	void InitializeFromDataAsset(const UItemDefinitionAsset* InItemDataAsset, bool bInInvokeCreatedCallbacks = true);
+
+	/** @brief Initializes a new logical instance from an existing instance and invokes creation callbacks for the clone. */
+	bool InitializeFromExistingInstance(const FInventoryItemInstance& InSourceInstance);
 
 	template <typename T>
 	T* GetFragment() const

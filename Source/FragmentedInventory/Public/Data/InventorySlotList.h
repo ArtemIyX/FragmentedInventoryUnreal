@@ -24,6 +24,9 @@ public:
 	// Initialize slots with a specific count and type
 	void InitializeSlots(int32 InSlotCount, EInventorySlotType InDefaultSlotType = EInventorySlotType::General);
 
+	/** @brief Invokes destruction callbacks for every valid item before bulk disposal. */
+	void ResetItemInstances();
+
 	// Get slot by index (const)
 	const FInventorySlot* GetSlot(int32 InSlotIndex) const;
 
