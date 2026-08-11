@@ -21,9 +21,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Slot")
 	static bool IsEmpty(const FInventorySlot& InSlot);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Slot")
+	/** @brief Checks whether an empty slot accepts a definition and quantity. Use CanAcceptItemInstance for occupied stacks. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Slot", meta = (DeprecatedFunction, DeprecationMessage = "Use CanAcceptItemInstance for exact occupied-stack validation.", ToolTip = "Checks whether an empty slot accepts a definition and quantity. Use Can Accept Item Instance for occupied stacks."))
 	static bool CanAcceptItem(const FInventorySlot& InSlot, const UItemDefinitionAsset* InItemDataAsset,
 	                          int32 InQuantity = 1);
+
+	/** @brief Checks whether a slot accepts a specific instance, including conditional stack policy. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Slot", meta = (ToolTip = "Checks whether a slot accepts a specific instance, including conditional stack policy."))
+	static bool CanAcceptItemInstance(const FInventorySlot& InSlot, const FInventoryItemInstance& InItemInstance,
+		int32 InQuantity = 1);
 
 	UFUNCTION(BlueprintCallable, Category="Inventory|Slot")
 	static bool CanStackWith(const FInventorySlot& InSlot, const FInventoryItemInstance& InOtherItem);

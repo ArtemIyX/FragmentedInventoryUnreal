@@ -116,7 +116,7 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 		return false;
 	}
 
-	FInventoryItemInstance CandidateItemInstance = CreateItemInstance(InItemDataAsset);
+	FInventoryItemInstance CandidateItemInstance = CreateItemInstance(InItemDataAsset, false);
 	if (!CandidateItemInstance.IsValidData())
 	{
 		UE_LOGFMT(LogFragmentedInventory, Error, "Failed to create item instance for {ItemDefinition}", InItemDataAsset->GetName());
@@ -208,6 +208,10 @@ bool UFragmentedInventoryComponent::AddItem(int32& OutSlotIndex, const UItemDefi
 
 		const int32 QuantityToAdd = FMath::Min(RemainingQuantity, MaxStackSize);
 		Slot->ItemInstance = bUseCandidateItemInstance ? MoveTemp(CandidateItemInstance) : CreateItemInstance(InItemDataAsset);
+		if (bUseCandidateItemInstance)
+		{
+			Slot->ItemInstance.InvokeCreatedCallbacks();
+		}
 		Slot->CurrentStackSize = QuantityToAdd;
 		RemainingQuantity -= QuantityToAdd;
 		MarkSlotDirty(*Slot);
@@ -330,7 +334,7 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 	}
 
 	FInventorySlot* Slot = SlotList.GetSlotMutable(InSlotIndex);
-	if (Slot == nullptr || !Slot->CanAcceptItem(InItemDataAsset, InQuantity))
+	if (Slot == nullptr)
 	{
 		UE_LOGFMT(LogFragmentedInventory, Warning, "Slot {SlotIndex} cannot accept the requested item quantity", InSlotIndex);
 		return false;
@@ -338,13 +342,19 @@ bool UFragmentedInventoryComponent::AddItemToSlot(int32 InSlotIndex, const UItem
 
 	if (Slot->IsEmpty())
 	{
+		if (!Slot->CanAcceptItem(InItemDataAsset, InQuantity))
+		{
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Slot {SlotIndex} cannot accept the requested item quantity", InSlotIndex);
+			return false;
+		}
+
 		Slot->ItemInstance = CreateItemInstance(InItemDataAsset);
 		Slot->CurrentStackSize = InQuantity;
 	}
 	else
 	{
-		FInventoryItemInstance CandidateItemInstance = CreateItemInstance(InItemDataAsset);
-		if (!CandidateItemInstance.IsValidData() || !Slot->CanStackWith(CandidateItemInstance))
+		FInventoryItemInstance CandidateItemInstance = CreateItemInstance(InItemDataAsset, false);
+		if (!Slot->CanAcceptItemInstance(CandidateItemInstance, InQuantity))
 		{
 			UE_LOGFMT(LogFragmentedInventory, Warning, "Slot {SlotIndex} cannot stack the requested item instance", InSlotIndex);
 			CandidateItemInstance.Reset();

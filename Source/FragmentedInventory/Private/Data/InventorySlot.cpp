@@ -42,33 +42,29 @@ bool FInventorySlot::CanAcceptItem(const UItemDefinitionAsset* InItemDataAsset, 
 		return false;
 	}
 
-	// If slot is empty, check the requested stack size.
+	if (!IsEmpty())
+	{
+		return false;
+	}
+
+	const int32 MaxStackSize = InItemDataAsset->GetMaxStackSize();
+	return MaxStackSize > 0 && InQuantity <= MaxStackSize;
+}
+
+bool FInventorySlot::CanAcceptItemInstance(const FInventoryItemInstance& InItemInstance, int32 InQuantity) const
+{
+	const UItemDefinitionAsset* ItemDataAsset = InItemInstance.GetItemDataAsset();
+	if (!InItemInstance.IsValidData() || !IsValid(ItemDataAsset) || InQuantity <= 0)
+	{
+		return false;
+	}
+
 	if (IsEmpty())
 	{
-		const int32 MaxStackSize = InItemDataAsset->GetMaxStackSize();
-		if (MaxStackSize <= 0 || InQuantity > MaxStackSize)
-		{
-			return false;
-		}
-
-		return true;
+		return CanAcceptItem(ItemDataAsset, InQuantity);
 	}
 
-	// If slot has an item, check if we can stack
-	if (!ItemInstance.IsValidData())
-	{
-		return false;
-	}
-
-	// Check if same item type
-	if (ItemInstance.GetItemDataAsset() != InItemDataAsset)
-	{
-		return false;
-	}
-
-	// Check if we have space for the quantity
-	const int32 remainingSpace = GetRemainingStackSpace();
-	return remainingSpace >= InQuantity;
+	return CanStackWith(InItemInstance) && GetRemainingStackSpace() >= InQuantity;
 }
 
 bool FInventorySlot::CanPlaceItem(const UItemDefinitionAsset* InItemDataAsset) const

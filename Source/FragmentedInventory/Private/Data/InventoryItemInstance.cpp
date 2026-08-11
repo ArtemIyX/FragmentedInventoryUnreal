@@ -49,10 +49,11 @@ void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset*
 		fragment->InitializeDynamicData(dynamicData);
 		DynamicFragmentData.Add(MoveTemp(dynamicData));
 
-		if (bInInvokeCreatedCallbacks)
-		{
-			fragment->OnItemCreated(this, DynamicFragmentData.Last());
-		}
+	}
+
+	if (bInInvokeCreatedCallbacks)
+	{
+		InvokeCreatedCallbacks();
 	}
 }
 
@@ -79,31 +80,48 @@ bool FInventoryItemInstance::InitializeFromExistingInstance(const FInventoryItem
 	ItemTags = InSourceInstance.ItemTags;
 	DynamicFragmentData = InSourceInstance.DynamicFragmentData;
 
-	if (!bInInvokeCreatedCallbacks)
+	if (bInInvokeCreatedCallbacks)
 	{
-		return true;
+		InvokeCreatedCallbacks();
 	}
 
-	const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = SourceItemDataAsset->GetFragments();
+	return true;
+}
+
+void FInventoryItemInstance::InvokeCreatedCallbacks()
+{
+	if (bLifecycleCallbacksInvoked)
+	{
+		return;
+	}
+
+	const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset();
+	if (!IsValid(LoadedItemDataAsset))
+	{
+		UE_LOGFMT(LogFragmentedInventory, Warning, "Cannot invoke creation callbacks for an invalid inventory item instance");
+		return;
+	}
+
+	const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = LoadedItemDataAsset->GetFragments();
 	for (int32 FragmentIndex = 0; FragmentIndex < Fragments.Num(); ++FragmentIndex)
 	{
 		const UItemFragment_Base* Fragment = Fragments[FragmentIndex];
 		if (!IsValid(Fragment))
 		{
-			UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", SourceItemDataAsset->GetName());
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", LoadedItemDataAsset->GetName());
 			continue;
 		}
 
 		if (!DynamicFragmentData.IsValidIndex(FragmentIndex))
 		{
-			UE_LOGFMT(LogFragmentedInventory, Warning, "Missing dynamic data for fragment {Fragment} while cloning item {ItemDefinition}", Fragment->GetName(), SourceItemDataAsset->GetName());
+			UE_LOGFMT(LogFragmentedInventory, Warning, "Missing dynamic data for fragment {Fragment} while creating item {ItemDefinition}", Fragment->GetName(), LoadedItemDataAsset->GetName());
 			continue;
 		}
 
 		Fragment->OnItemCreated(this, DynamicFragmentData[FragmentIndex]);
 	}
 
-	return true;
+	bLifecycleCallbacksInvoked = true;
 }
 
 int32 FInventoryItemInstance::GetFragmentIndex(TSubclassOf<UItemFragment_Base> InFragmentClass) const
@@ -160,30 +178,34 @@ FSoftObjectPath FInventoryItemInstance::GetItemDataAssetPath() const
 
 void FInventoryItemInstance::Reset()
 {
-	if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())
+	if (bLifecycleCallbacksInvoked)
 	{
-		const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = LoadedItemDataAsset->GetFragments();
-		for (int32 FragmentIndex = 0; FragmentIndex < Fragments.Num(); ++FragmentIndex)
+		if (const UItemDefinitionAsset* LoadedItemDataAsset = GetItemDataAsset())
 		{
-			const UItemFragment_Base* Fragment = Fragments[FragmentIndex];
-			if (!IsValid(Fragment))
+			const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = LoadedItemDataAsset->GetFragments();
+			for (int32 FragmentIndex = 0; FragmentIndex < Fragments.Num(); ++FragmentIndex)
 			{
-				UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", LoadedItemDataAsset->GetName());
-				continue;
-			}
+				const UItemFragment_Base* Fragment = Fragments[FragmentIndex];
+				if (!IsValid(Fragment))
+				{
+					UE_LOGFMT(LogFragmentedInventory, Warning, "Null fragment in item definition {ItemDefinition}", LoadedItemDataAsset->GetName());
+					continue;
+				}
 
-			if (DynamicFragmentData.IsValidIndex(FragmentIndex))
-			{
-				Fragment->OnItemDestroyed(this, DynamicFragmentData[FragmentIndex]);
-			}
-			else
-			{
-				UE_LOGFMT(LogFragmentedInventory, Warning, "Missing dynamic data for fragment {Fragment} while resetting item {ItemDefinition}", Fragment->GetName(), LoadedItemDataAsset->GetName());
+				if (DynamicFragmentData.IsValidIndex(FragmentIndex))
+				{
+					Fragment->OnItemDestroyed(this, DynamicFragmentData[FragmentIndex]);
+				}
+				else
+				{
+					UE_LOGFMT(LogFragmentedInventory, Warning, "Missing dynamic data for fragment {Fragment} while resetting item {ItemDefinition}", Fragment->GetName(), LoadedItemDataAsset->GetName());
+				}
 			}
 		}
 	}
 
 	ItemInstanceID = FGuid();
+	bLifecycleCallbacksInvoked = false;
 	CachedItemDataAsset = nullptr;
 	ItemDataAsset = nullptr;
 	DynamicFragmentData.Reset();

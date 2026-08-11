@@ -27,6 +27,9 @@ public:
 	/** @brief Initializes a new logical instance from an existing instance. Lifecycle callbacks are authority-only for predicted clones. */
 	bool InitializeFromExistingInstance(const FInventoryItemInstance& InSourceInstance, bool bInInvokeCreatedCallbacks = true);
 
+	/** @brief Invokes creation callbacks once after a provisional instance is committed to inventory state. */
+	void InvokeCreatedCallbacks();
+
 	template <typename T>
 	T* GetFragment() const
 	{
@@ -90,6 +93,9 @@ public:
 	// Cached pointer to loaded data asset (for fast access, not replicated)
 	UPROPERTY(Transient, NotReplicated)
 	mutable TObjectPtr<const UItemDefinitionAsset> CachedItemDataAsset;
+
+	/** @brief Tracks whether matching destruction callbacks are required. */
+	bool bLifecycleCallbacksInvoked = false;
 
 private:
 	friend class UFragmentedInventoryComponent;

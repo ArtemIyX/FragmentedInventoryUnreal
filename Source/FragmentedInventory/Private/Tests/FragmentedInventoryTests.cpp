@@ -109,6 +109,8 @@ bool FFragmentedInventoryConditionalSlotSearchTest::RunTest(const FString& Param
 	SlotList.Slots[0].CurrentStackSize = 1;
 
 	TestEqual(TEXT("Definition-only slot search returns an empty compatible slot"), SlotList.FindSlotForItem(ItemDefinition), 1);
+	TestFalse(TEXT("Definition-only acceptance rejects occupied stacks"), SlotList.Slots[0].CanAcceptItem(ItemDefinition));
+	TestFalse(TEXT("Instance-aware acceptance rejects an incompatible conditional stack"), SlotList.Slots[0].CanAcceptItemInstance(CandidateItemInstance));
 	TestEqual(TEXT("Instance-aware slot search skips an incompatible conditional stack"), SlotList.FindSlotForItemInstance(CandidateItemInstance), 1);
 	return true;
 }
@@ -456,11 +458,13 @@ bool FFragmentedInventoryCandidateLifecycleTest::RunTest(const FString& Paramete
 	int32 SlotIndex = INDEX_NONE;
 	TestTrue(TEXT("Initial stack is added"), Inventory->AddItem(SlotIndex, ItemDefinition, 5));
 	TestTrue(TEXT("Fully stacked addition succeeds"), Inventory->AddItem(SlotIndex, ItemDefinition, 5));
-	TestEqual(TEXT("Fully stacked addition cleans up its candidate instance"), LifecycleFragment->GetDestroyedCallbackCount(), 1);
+	TestEqual(TEXT("Fully stacked addition does not create a provisional lifecycle instance"), LifecycleFragment->GetCreatedCallbackCount(), 1);
+	TestEqual(TEXT("Fully stacked addition does not destroy a provisional lifecycle instance"), LifecycleFragment->GetDestroyedCallbackCount(), 0);
 
 	TestTrue(TEXT("Inventory fills its final capacity"), Inventory->AddItem(SlotIndex, ItemDefinition, 10));
 	TestFalse(TEXT("Capacity failure rejects the addition"), Inventory->AddItem(SlotIndex, ItemDefinition, 1));
-	TestEqual(TEXT("Capacity failure cleans up its candidate instance"), LifecycleFragment->GetDestroyedCallbackCount(), 2);
+	TestEqual(TEXT("Capacity failure does not create a provisional lifecycle instance"), LifecycleFragment->GetCreatedCallbackCount(), 2);
+	TestEqual(TEXT("Capacity failure does not destroy a provisional lifecycle instance"), LifecycleFragment->GetDestroyedCallbackCount(), 0);
 	return true;
 }
 
