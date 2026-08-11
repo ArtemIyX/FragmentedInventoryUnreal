@@ -671,7 +671,8 @@ bool UFragmentedInventoryComponent::MoveItemInternal(int32 InFromSlotIndex, int3
 		}
 		else
 		{
-			if (!ToSlot->ItemInstance.InitializeFromExistingInstance(FromSlot->ItemInstance))
+			const bool bInvokeCreatedCallbacks = GetOwnerRole() == ROLE_Authority;
+			if (!ToSlot->ItemInstance.InitializeFromExistingInstance(FromSlot->ItemInstance, bInvokeCreatedCallbacks))
 			{
 				UE_LOGFMT(LogFragmentedInventory, Error, "Failed to clone item from slot {SlotIndex}", InFromSlotIndex);
 				return false;

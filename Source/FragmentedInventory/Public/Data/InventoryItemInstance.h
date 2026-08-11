@@ -24,8 +24,8 @@ public:
 	// Initialize item from data asset
 	void InitializeFromDataAsset(const UItemDefinitionAsset* InItemDataAsset, bool bInInvokeCreatedCallbacks = true);
 
-	/** @brief Initializes a new logical instance from an existing instance and invokes creation callbacks for the clone. */
-	bool InitializeFromExistingInstance(const FInventoryItemInstance& InSourceInstance);
+	/** @brief Initializes a new logical instance from an existing instance. Lifecycle callbacks are authority-only for predicted clones. */
+	bool InitializeFromExistingInstance(const FInventoryItemInstance& InSourceInstance, bool bInInvokeCreatedCallbacks = true);
 
 	template <typename T>
 	T* GetFragment() const

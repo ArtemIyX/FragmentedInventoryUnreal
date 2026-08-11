@@ -293,6 +293,7 @@ protected:
 private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FFragmentedInventoryPredictionRollbackTest;
+	friend class FFragmentedInventoryPredictionLifecycleRollbackTest;
 #endif
 
 	int32 NextPredictionId;

@@ -188,6 +188,7 @@ bool FFragmentedInventoryPredictionRollbackTest::RunTest(const FString& Paramete
 {
 	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>();
 	Inventory->SlotList.InitializeSlots(2);
+	TestFalse(TEXT("Prediction fixture is non-authoritative"), Inventory->GetOwnerRole() == ROLE_Authority);
 
 	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
 	FInventoryItemInstance ItemInstance;
@@ -212,6 +213,47 @@ bool FFragmentedInventoryPredictionRollbackTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("Rollback restores source quantity"), Inventory->SlotList.Slots[0].CurrentStackSize, 1);
 	TestTrue(TEXT("Rollback restores empty destination"), Inventory->SlotList.Slots[1].IsEmpty());
 	TestFalse(TEXT("Raw move cannot mutate an unowned non-authoritative component"), Inventory->MoveItem(0, 1));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FFragmentedInventoryPredictionLifecycleRollbackTest,
+	"FragmentedInventory.Inventory.PredictionLifecycleRollback",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::EngineFilter)
+
+bool FFragmentedInventoryPredictionLifecycleRollbackTest::RunTest(const FString& Parameters)
+{
+	UFragmentedInventoryComponent* Inventory = NewObject<UFragmentedInventoryComponent>();
+	Inventory->SlotList.InitializeSlots(2);
+	TestFalse(TEXT("Prediction lifecycle fixture is non-authoritative"), Inventory->GetOwnerRole() == ROLE_Authority);
+
+	UItemDefinitionAsset* ItemDefinition = NewObject<UItemDefinitionAsset>();
+	UItemFragment_LifecycleTest* LifecycleFragment = NewObject<UItemFragment_LifecycleTest>(ItemDefinition);
+	UItemFragment_Stackable* StackableFragment = NewObject<UItemFragment_Stackable>(ItemDefinition);
+	StackableFragment->MaxStackSize = 2;
+	ItemDefinition->Fragments.Add(LifecycleFragment);
+	ItemDefinition->Fragments.Add(StackableFragment);
+
+	FInventoryItemInstance ItemInstance;
+	ItemInstance.InitializeFromDataAsset(ItemDefinition);
+	Inventory->SlotList.Slots[0].ItemInstance = MoveTemp(ItemInstance);
+	Inventory->SlotList.Slots[0].CurrentStackSize = 2;
+
+	UFragmentedInventoryComponent::FPendingMovePrediction Prediction;
+	Prediction.PredictionId = 1;
+	Prediction.FromSlotIndex = 0;
+	Prediction.ToSlotIndex = 1;
+	Prediction.FromSlotBefore = Inventory->SlotList.Slots[0];
+	Prediction.ToSlotBefore = Inventory->SlotList.Slots[1];
+	Inventory->PendingMovePrediction = Prediction;
+
+	TArray<int32> ChangedSlotIndices;
+	bool bSlotsSwapped = false;
+	TestTrue(TEXT("Non-authoritative partial prediction succeeds locally"), Inventory->MoveItemInternal(0, 1, 1, &ChangedSlotIndices, &bSlotsSwapped));
+	TestEqual(TEXT("Predicted split does not invoke lifecycle creation callbacks"), LifecycleFragment->GetCreatedCallbackCount(), 1);
+	Inventory->RollbackPendingMove();
+	TestTrue(TEXT("Rollback restores an empty destination"), Inventory->SlotList.Slots[1].IsEmpty());
+	TestEqual(TEXT("Rollback does not require a predicted lifecycle destruction callback"), LifecycleFragment->GetDestroyedCallbackCount(), 0);
 	return true;
 }
 

@@ -56,7 +56,8 @@ void FInventoryItemInstance::InitializeFromDataAsset(const UItemDefinitionAsset*
 	}
 }
 
-bool FInventoryItemInstance::InitializeFromExistingInstance(const FInventoryItemInstance& InSourceInstance)
+bool FInventoryItemInstance::InitializeFromExistingInstance(const FInventoryItemInstance& InSourceInstance,
+	bool bInInvokeCreatedCallbacks)
 {
 	if (this == &InSourceInstance)
 	{
@@ -77,6 +78,11 @@ bool FInventoryItemInstance::InitializeFromExistingInstance(const FInventoryItem
 	CachedItemDataAsset = SourceItemDataAsset;
 	ItemTags = InSourceInstance.ItemTags;
 	DynamicFragmentData = InSourceInstance.DynamicFragmentData;
+
+	if (!bInInvokeCreatedCallbacks)
+	{
+		return true;
+	}
 
 	const TArray<TObjectPtr<UItemFragment_Base>>& Fragments = SourceItemDataAsset->GetFragments();
 	for (int32 FragmentIndex = 0; FragmentIndex < Fragments.Num(); ++FragmentIndex)
